@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Koupon</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6fb; --card:#ffffff; --ink:#1c1d2b; --muted:#6b6f86;
+    --brand:#4f46e5; --brand-d:#3c34c9; --accent:#0fb5a6; --line:#e7e8f2;
+    --good:#0fa37f; --bad:#d8453f; --shadow:0 6px 24px rgba(28,29,43,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45;
+    padding-bottom:88px;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:16px}
+  header{display:flex;align-items:center;gap:10px;padding:8px 4px 14px}
+  .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--brand),var(--accent));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800}
+  header h1{font-size:18px;margin:0;font-weight:700}
+  header .who{margin-left:auto;font-size:13px;color:var(--muted);text-align:right}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+  .bal-card{background:linear-gradient(135deg,var(--brand),#7a72f2);color:#fff;border:none}
+  .bal-label{font-size:13px;opacity:.85;margin:0}
+  .bal{font-size:44px;font-weight:800;margin:2px 0 0;letter-spacing:-1px}
+  .bal small{font-size:18px;font-weight:700;opacity:.9}
+  .row{display:flex;gap:10px}
+  .btn{appearance:none;border:none;border-radius:14px;padding:14px 16px;font-size:16px;font-weight:700;
+    background:var(--brand);color:#fff;width:100%;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .btn.sec{background:#eef0fb;color:var(--brand)}
+  .btn.ghost{background:transparent;color:var(--muted);font-weight:600;box-shadow:none}
+  .btn.warn{background:#fdecec;color:var(--bad)}
+  .btn.sm{padding:10px 12px;font-size:14px;width:auto}
+  label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px;font-weight:600}
+  input,select{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:#fff;color:var(--ink)}
+  .muted{color:var(--muted);font-size:13px}
+  .center{text-align:center}
+  h2{font-size:16px;margin:0 0 4px}
+  .hide{display:none!important}
+  .hist{list-style:none;margin:0;padding:0}
+  .hist li{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line)}
+  .hist li:last-child{border-bottom:none}
+  .pill{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
+  .pill.in{background:#e6f7f1;color:var(--good)}
+  .pill.out{background:#fdecec;color:var(--bad)}
+  .pill.mint{background:#eef0fb;color:var(--brand)}
+  .hist .amt{margin-left:auto;font-weight:800}
+  .amt.in{color:var(--good)} .amt.out{color:var(--bad)}
+  #qrbox{display:flex;justify-content:center;padding:14px;background:#fff;border-radius:14px}
+  .code{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#f4f5fb;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}
+  #reader{width:100%;border-radius:14px;overflow:hidden;margin-top:8px}
+  .tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
+  .tab{flex:1;text-align:center;padding:8px 2px;font-size:11px;color:var(--muted);font-weight:600;border:none;background:none;cursor:pointer}
+  .tab .ic{display:block;font-size:20px;line-height:1}
+  .tab.on{color:var(--brand)}
+  .reward{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .reward:last-child{border-bottom:none}
+  .reward .nm{font-weight:600}
+  .reward .cost{margin-left:auto;font-weight:800;color:var(--brand)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:#eef0fb;color:var(--brand);margin-left:6px}
+  .toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:11px 16px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:.25s;z-index:50;max-width:88%;text-align:center}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">K</div>
+    <h1>Koupon</h1>
+    <div class="who" id="who"></div>
+  </header>
+
+  <!-- ONBOARDING -->
+  <section id="view-setup" class="card hide">
+    <h2>Welcome 👋</h2>
+    <p class="muted">Set up this phone. Your balance and history live only on this device.</p>
+    <label>Your handle</label>
+    <input id="su-handle" placeholder="e.g. @tania" autocapitalize="none" />
+    <label>Role on this phone</label>
+    <select id="su-role">
+      <option value="member">Family member</option>
+      <option value="banker">Banker (issues KP &amp; runs rewards)</option>
+    </select>
+    <label>Starting balance</label>
+    <input id="su-start" type="number" inputmode="numeric" value="100" />
+    <p class="muted" style="margin-top:6px">Everyone starts with 100 KP. The banker can also issue these in person later.</p>
+    <button class="btn" id="su-go" style="margin-top:14px">Start using Koupon</button>
+  </section>
+
+  <!-- HOME -->
+  <section id="view-home" class="hide">
+    <div class="card bal-card">
+      <p class="bal-label">Your balance</p>
+      <p class="bal" id="balance">0 <small>KP</small></p>
+    </div>
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn" onclick="go('send')">Send</button>
+      <button class="btn sec" onclick="go('receive')">Receive</button>
+    </div>
+    <div class="card">
+      <h2>Recent activity</h2>
+      <ul class="hist" id="hist"></ul>
+      <p class="muted center" id="hist-empty">No activity yet. Send or receive to get started.</p>
+    </div>
+  </section>
+
+  <!-- SEND -->
+  <section id="view-send" class="hide">
+    <div class="card">
+      <h2>Send koupon</h2>
+      <p class="muted" id="send-mintnote"></p>
+      <label>Amount (KP)</label>
+      <input id="snd-amt" type="number" inputmode="numeric" placeholder="0" />
+      <label>To (their handle, optional)</label>
+      <input id="snd-to" placeholder="@name" autocapitalize="none" />
+      <label>Note (optional)</label>
+      <input id="snd-note" placeholder="What for?" />
+      <button class="btn" id="snd-go" style="margin-top:14px">Create payment</button>
+    </div>
+    <div class="card hide" id="snd-result">
+      <h2 class="center">Show this to the receiver</h2>
+      <p class="muted center" id="snd-summary"></p>
+      <div id="qrbox"></div>
+      <p class="muted center" style="margin-top:10px">Can't scan? Share this code instead:</p>
+      <div class="code" id="snd-code"></div>
+      <button class="btn sec sm" style="width:100%;margin-top:10px" id="snd-copy">Copy code</button>
+      <button class="btn ghost" style="margin-top:6px" onclick="go('home')">Done</button>
+    </div>
+  </section>
+
+  <!-- RECEIVE -->
+  <section id="view-receive" class="hide">
+    <div class="card">
+      <h2>Receive koupon</h2>
+      <p class="muted">Scan the sender's QR, or paste their code below.</p>
+      <div id="reader"></div>
+      <p class="muted center" id="cam-note" style="margin-top:8px"></p>
+      <label>Paste a koupon code</label>
+      <input id="rcv-code" placeholder="KPN1...." autocapitalize="none" />
+      <button class="btn" id="rcv-go" style="margin-top:12px">Add to my balance</button>
+    </div>
+  </section>
+
+  <!-- REWARDS -->
+  <section id="view-rewards" class="hide">
+    <div class="card">
+      <h2>Rewards <span class="tag" id="rw-role"></span></h2>
+      <p class="muted">Redeem koupon for a reward. Redeeming sends the KP back to the banker, who gives you the reward in person.</p>
+      <div id="rw-list"></div>
+      <p class="muted center hide" id="rw-empty">No rewards yet.</p>
+    </div>
+    <div class="card" id="rw-add-card">
+      <h2>Add a reward</h2>
+      <label>Name</label>
+      <input id="rw-name" placeholder="e.g. Movie night pick" />
+      <label>Cost (KP)</label>
+      <input id="rw-cost" type="number" inputmode="numeric" placeholder="0" />
+      <button class="btn sec" id="rw-add" style="margin-top:12px">Add reward</button>
+    </div>
+  </section>
+
+  <!-- BANKER -->
+  <section id="view-banker" class="hide">
+    <div class="card">
+      <h2>Banker tools 🏦</h2>
+      <p class="muted">You issue koupon. Create a code, then have the family member scan it on their Receive screen.</p>
+      <label>Issue to (handle, optional)</label>
+      <input id="bk-to" placeholder="@name" autocapitalize="none" />
+      <div class="row" style="margin-top:12px">
+        <button class="btn sec" id="bk-start">Issue start (100)</button>
+        <button class="btn sec" id="bk-month">Monthly (+5)</button>
+      </div>
+      <label style="margin-top:14px">Custom amount</label>
+      <input id="bk-amt" type="number" inputmode="numeric" placeholder="0" />
+      <button class="btn" id="bk-custom" style="margin-top:12px">Issue custom amount</button>
+    </div>
+    <div class="card hide" id="bk-result">
+      <h2 class="center">Have them scan this</h2>
+      <p class="muted center" id="bk-summary"></p>
+      <div id="qrbox-bk" style="display:flex;justify-content:center;padding:14px;background:#fff;border-radius:14px"></div>
+      <div class="code" id="bk-code"></div>
+      <button class="btn sec sm" style="width:100%;margin-top:10px" id="bk-copy">Copy code</button>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="hide">
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="muted">Your data lives only on this phone. Copy your backup somewhere safe — if the browser clears its storage, you can paste it back.</p>
+      <button class="btn sec" id="set-export">Copy my backup</button>
+      <label style="margin-top:14px">Restore from backup</label>
+      <input id="set-import" placeholder="Paste backup here" autocapitalize="none" />
+      <button class="btn sec" id="set-restore" style="margin-top:10px">Restore</button>
+    </div>
+    <div class="card">
+      <h2>This phone</h2>
+      <p class="muted" id="set-info"></p>
+      <button class="btn warn" id="set-reset" style="margin-top:8px">Reset everything</button>
+    </div>
+  </section>
+</div>
+
+<!-- TABS -->
+<nav class="tabs hide" id="tabs">
+  <button class="tab" data-go="home"><span class="ic">🏠</span>Home</button>
+  <button class="tab" data-go="send"><span class="ic">↗️</span>Send</button>
+  <button class="tab" data-go="receive"><span class="ic">↙️</span>Receive</button>
+  <button class="tab" data-go="rewards"><span class="ic">🎁</span>Rewards</button>
+  <button class="tab" data-go="banker" id="tab-banker"><span class="ic">🏦</span>Banker</button>
+  <button class="tab" data-go="settings"><span class="ic">⚙️</span>More</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- core logic (pure, testable) ---------- */
+const PREFIX = "KPN1.";
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function makeToken(o){ return { v:1, id:uid(), type:o.type, from:o.from||null, to:o.to||null, amount:Number(o.amount), note:o.note||"", ts:Date.now() }; }
+function encodeToken(t){ return PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(t)))); }
+function decodeToken(s){
+  s=(s||"").trim();
+  if(!s.startsWith(PREFIX)) throw new Error("That isn't a koupon code.");
+  const t = JSON.parse(decodeURIComponent(escape(atob(s.slice(PREFIX.length)))));
+  if(typeof t.amount!=="number" || !(t.amount>0) || !t.id) throw new Error("This code looks invalid.");
+  return t;
+}
+// returns {balance, applied} or throws
+function applyIncoming(state, t){
+  if(state.applied.includes(t.id)) throw new Error("This code was already added.");
+  return { balance: state.balance + t.amount, id: t.id };
+}
+
+/* ---------- app state ---------- */
+const KEY="koupon_state_v1";
+let S=null, scanner=null;
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
+function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
+function fresh(handle, role, start){
+  return { handle, role, balance:Number(start)||0, history:[], rewards:[], applied:[] };
+}
+
+/* ---------- ui helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1900); }
+const VIEWS=["setup","home","send","receive","rewards","banker","settings"];
+function go(v){
+  if(scanner){ try{ scanner.stop().catch(()=>{}); }catch(e){} scanner=null; }
+  VIEWS.forEach(x=> $("view-"+x).classList.toggle("hide", x!==v));
+  document.querySelectorAll(".tab").forEach(b=> b.classList.toggle("on", b.dataset.go===v));
+  if(v==="send") resetSend();
+  if(v==="receive") startScan();
+  if(v==="rewards") renderRewards();
+  if(v==="banker") $("bk-result").classList.add("hide");
+  if(v==="settings") $("set-info").textContent = S.handle+" · "+(S.role==="banker"?"Banker":"Member");
+  window.scrollTo(0,0);
+}
+
+function render(){
+  $("balance").innerHTML = S.balance + ' <small>KP</small>';
+  $("who").textContent = S.handle + (S.role==="banker"?" · Banker":"");
+  $("tab-banker").classList.toggle("hide", S.role!=="banker");
+  $("send-mintnote").textContent = "";
+  // history
+  const ul=$("hist"); ul.innerHTML="";
+  const items=(S.history||[]).slice(0,25);
+  $("hist-empty").classList.toggle("hide", items.length>0);
+  items.forEach(h=>{
+    const li=document.createElement("li");
+    const cls = h.dir==="in" ? "in" : (h.kind==="mint"?"mint":"out");
+    const sign = h.dir==="in" ? "+" : "−";
+    const who = h.dir==="in" ? (h.from? "From "+h.from : (h.kind==="mint"?"Issued":"Received")) : (h.to? "To "+h.to : "Sent");
+    li.innerHTML = '<span class="pill '+cls+'">'+(h.dir==="in"?"↙":"↗")+'</span>'
+      + '<div><div style="font-weight:600">'+who+'</div><div class="muted">'+(h.note||new Date(h.ts).toLocaleDateString())+'</div></div>'
+      + '<span class="amt '+(h.dir==="in"?"in":"out")+'">'+sign+h.amount+'</span>';
+    ul.appendChild(li);
+  });
+}
+
+function pushHistory(h){ S.history.unshift(h); if(S.history.length>200) S.history.pop(); }
+
+/* ---------- send ---------- */
+function resetSend(){ $("snd-result").classList.add("hide"); $("snd-amt").value=""; $("snd-to").value=""; $("snd-note").value=""; }
+function showQR(boxId, text){ const b=$(boxId); b.innerHTML=""; try{ new QRCode(b,{text,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){ b.innerHTML='<p class="muted">QR unavailable — use the code below.</p>'; } }
+
+$("snd-go").onclick=()=>{
+  const amt=Number($("snd-amt").value);
+  if(!(amt>0)) return toast("Enter an amount.");
+  if(amt>S.balance) return toast("Not enough KP.");
+  const to=$("snd-to").value.trim()||null, note=$("snd-note").value.trim();
+  const t=makeToken({type:"transfer", from:S.handle, to, amount:amt, note});
+  S.balance-=amt; pushHistory({dir:"out", kind:"transfer", to, amount:amt, note, ts:t.ts}); save(); render();
+  const code=encodeToken(t);
+  $("snd-summary").textContent = amt+" KP"+(to?" to "+to:"");
+  $("snd-code").textContent=code; showQR("qrbox",code);
+  $("snd-result").classList.remove("hide");
+  $("snd-copy").onclick=()=>copy(code);
+  toast("Payment created — show the QR.");
+};
+
+/* ---------- receive ---------- */
+function receiveCode(raw){
+  let t; try{ t=decodeToken(raw); }catch(e){ return toast(e.message); }
+  let r; try{ r=applyIncoming(S,t); }catch(e){ return toast(e.message); }
+  S.balance=r.balance; S.applied.push(r.id);
+  pushHistory({dir:"in", kind:(t.type==="grant"?"mint":"transfer"), from:t.from, amount:t.amount, note:t.note, ts:Date.now()});
+  save(); render();
+  toast("Added "+t.amount+" KP ✓");
+  go("home");
+}
+$("rcv-go").onclick=()=>{ const v=$("rcv-code").value; if(!v.trim()) return toast("Paste a code first."); receiveCode(v); $("rcv-code").value=""; };
+
+function startScan(){
+  const note=$("cam-note");
+  if(typeof Html5Qrcode==="undefined"){ note.textContent="Camera library didn't load — use the paste box."; return; }
+  if(!(location.protocol==="https:"||location.hostname==="localhost")){
+    note.textContent="📷 Camera needs an https link. Use the paste box, or host the file (see notes)."; return;
+  }
+  note.textContent="Point at the sender's QR…";
+  scanner=new Html5Qrcode("reader");
+  scanner.start({facingMode:"environment"},{fps:10,qrbox:230},
+    txt=>{ if(scanner){ scanner.stop().catch(()=>{}); scanner=null; } receiveCode(txt); },
+    ()=>{}
+  ).catch(()=>{ note.textContent="Couldn't open the camera — use the paste box below."; });
+}
+
+/* ---------- rewards ---------- */
+function renderRewards(){
+  $("rw-role").textContent = S.role==="banker"?"Banker":"";
+  $("rw-add-card").classList.toggle("hide", false);
+  const list=$("rw-list"); list.innerHTML="";
+  const rws=S.rewards||[];
+  $("rw-empty").classList.toggle("hide", rws.length>0);
+  rws.forEach((r,i)=>{
+    const d=document.createElement("div"); d.className="reward";
+    d.innerHTML='<div class="nm">'+escapeHtml(r.name)+'</div><div class="cost">'+r.cost+' KP</div>';
+    const b=document.createElement("button"); b.className="btn sm sec"; b.textContent="Redeem"; b.style.marginLeft="10px";
+    b.onclick=()=>redeem(r);
+    d.appendChild(b); list.appendChild(d);
+  });
+}
+function redeem(r){
+  if(r.cost>S.balance) return toast("Not enough KP for that.");
+  const t=makeToken({type:"transfer", from:S.handle, to:"banker", amount:r.cost, note:"Redeem: "+r.name});
+  S.balance-=r.cost; pushHistory({dir:"out", kind:"redeem", to:"banker", amount:r.cost, note:"Redeem: "+r.name, ts:t.ts}); save(); render();
+  const code=encodeToken(t);
+  go("send"); // reuse send result panel
+  $("snd-summary").textContent="Redeem "+r.name+" — "+r.cost+" KP to banker";
+  $("snd-code").textContent=code; showQR("qrbox",code); $("snd-result").classList.remove("hide");
+  $("snd-copy").onclick=()=>copy(code);
+  toast("Show this to the banker.");
+}
+$("rw-add").onclick=()=>{
+  const name=$("rw-name").value.trim(), cost=Number($("rw-cost").value);
+  if(!name) return toast("Name the reward.");
+  if(!(cost>0)) return toast("Set a cost.");
+  S.rewards.push({name,cost}); save(); $("rw-name").value=""; $("rw-cost").value=""; renderRewards(); toast("Reward added.");
+};
+
+/* ---------- banker ---------- */
+function bankerIssue(amount){
+  const to=$("bk-to").value.trim()||null;
+  const t=makeToken({type:"grant", from:"banker", to, amount});
+  const code=encodeToken(t);
+  $("bk-summary").textContent = "Issue "+amount+" KP"+(to?" to "+to:"");
+  $("bk-code").textContent=code;
+  const b=$("qrbox-bk"); b.innerHTML=""; try{ new QRCode(b,{text:code,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
+  $("bk-result").classList.remove("hide");
+  $("bk-copy").onclick=()=>copy(code);
+  pushHistory({dir:"out", kind:"mint", to, amount, note:"Issued", ts:t.ts}); // banker log only
+  save(); render();
+}
+$("bk-start").onclick=()=>bankerIssue(100);
+$("bk-month").onclick=()=>bankerIssue(5);
+$("bk-custom").onclick=()=>{ const a=Number($("bk-amt").value); if(!(a>0)) return toast("Enter an amount."); bankerIssue(a); $("bk-amt").value=""; };
+
+/* ---------- settings ---------- */
+$("set-export").onclick=()=>copy(JSON.stringify(S));
+$("set-restore").onclick=()=>{
+  try{ const d=JSON.parse($("set-import").value); if(!d.handle) throw 0; S=d; save(); render(); toast("Restored ✓"); go("home"); }
+  catch(e){ toast("That backup didn't read correctly."); }
+};
+$("set-reset").onclick=()=>{ if(confirm("Erase everything on this phone?")){ localStorage.removeItem(KEY); location.reload(); } };
+
+/* ---------- misc ---------- */
+function copy(text){ navigator.clipboard?.writeText(text).then(()=>toast("Copied ✓"),()=>toast("Copy failed")); }
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+document.querySelectorAll(".tab").forEach(b=> b.onclick=()=>go(b.dataset.go));
+
+/* ---------- boot ---------- */
+$("su-go").onclick=()=>{
+  let h=$("su-handle").value.trim(); if(!h) return toast("Pick a handle.");
+  if(!h.startsWith("@")) h="@"+h;
+  S=fresh(h, $("su-role").value, $("su-start").value); save();
+  $("tabs").classList.remove("hide"); render(); go("home");
+};
+(function boot(){
+  S=load();
+  if(S && S.handle){ $("tabs").classList.remove("hide"); render(); go("home"); }
+  else { go("setup"); }
+})();
+</script>
+</body>
+</html>
