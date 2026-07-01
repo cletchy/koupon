@@ -53,7 +53,9 @@ $$;
 
 -- ---------- verify_pin now also returns status ----------
 
-create or replace function verify_pin(p_handle text, p_pin text)
+drop function if exists verify_pin(text, text);
+
+create function verify_pin(p_handle text, p_pin text)
 returns table(id uuid, handle text, role text, status text, balance integer)
 language sql
 security definer
@@ -293,4 +295,4 @@ grant execute on function assign_role, set_member_status to anon;
 -- just this one line separately (after the rest of the script above has
 -- already succeeded):
 
--- update members set role = 'issuer' where handle = '@tania';
+-- update members set rol
