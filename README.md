@@ -1,4 +1,4 @@
-# Koupon — Family Pilot
+# Koupon — Family Pilot — https://cletchy.github.io/koupon/
 
 A small, just-for-fun app for sharing a play currency called **koupon (KP)** among family. Each phone keeps its own balance, and you pay each other in person with a QR code (or a copy-paste code). There is no server and nothing leaves your phone — it runs on the honour system, for fun, not for real money.
 
@@ -26,4 +26,4 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 - **Back up now and then.** Phones can clear browser storage after long disuse, which would wipe a balance. Use **More → Copy my backup** occasionally and keep the text somewhere safe; **Restore** pastes it back.
 - **It's honour-system.** Balances live only on each phone with no central record, so it relies on everyone playing fair — which is the point for a family game. (The blueprints describe what a tamper-proof, real-money version would take.)
-- **No internet needed for a payment.** The transfer itself is just a QR/code between two phones. Internet is
+- **No internet needed for a payment.** The transfer itself is just a Q
