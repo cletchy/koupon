@@ -84,9 +84,11 @@
   .reward .nm{font-weight:700}
   .reward .cost{margin-left:auto;font-weight:800;color:var(--accent2)}
   .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(139,92,246,.18);color:var(--brand);margin-left:6px;border:1px solid var(--brand)}
+  .tag.bad{background:rgba(255,59,107,.18);color:var(--bad);border-color:var(--bad)}
   .toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);background:var(--card-2);color:var(--ink);border:1px solid var(--brand);
     padding:11px 16px;border-radius:12px;font-size:14px;font-weight:700;opacity:0;transition:.25s;z-index:50;max-width:88%;text-align:center;box-shadow:var(--glow-brand)}
   .toast.show{opacity:1}
+  .member-row{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -107,19 +109,16 @@
     <input id="au-pin" type="password" inputmode="numeric" placeholder="4-6 digits" />
     <button class="btn" id="au-login" style="margin-top:14px">Log in</button>
     <div class="muted center" style="margin:16px 0 6px">— new here? —</div>
-    <label>Role</label>
-    <select id="au-role">
-      <option value="member">Family member</option>
-      <option value="banker">Banker (issues KP &amp; runs rewards)</option>
-    </select>
-    <label>Starting balance</label>
-    <input id="au-start" type="number" inputmode="numeric" value="100" />
-    <button class="btn sec" id="au-create" style="margin-top:12px">Create new account</button>
+    <p class="muted" style="margin-top:0">New accounts always start as a member with 100 KP. A banker or issuer can promote you afterward.</p>
+    <button class="btn sec" id="au-create" style="margin-top:6px">Create new account</button>
     <p class="muted center" id="au-error" style="margin-top:10px"></p>
   </section>
 
   <!-- HOME -->
   <section id="view-home" class="hide">
+    <div class="card" id="home-suspended" style="border-color:var(--bad);border-top-color:var(--bad);display:none">
+      <p class="muted" style="color:var(--bad);margin:0">Your account is suspended by the issuer. You can view your balance and history, but can't send or redeem.</p>
+    </div>
     <div class="card bal-card">
       <p class="bal-label">Your balance</p>
       <p class="bal" id="balance">0 <small>KP</small></p>
@@ -205,6 +204,16 @@
     </div>
   </section>
 
+  <!-- ISSUER -->
+  <section id="view-issuer" class="hide">
+    <div class="card">
+      <h2>Issuer tools 👑</h2>
+      <p class="muted">Assign roles and control membership status for everyone on Koupon. You can't demote or suspend the last active issuer.</p>
+      <button class="btn sec" id="is-refresh" style="margin-top:4px">Refresh member list</button>
+    </div>
+    <div id="is-list"></div>
+  </section>
+
   <!-- SETTINGS -->
   <section id="view-settings" class="hide">
     <div class="card">
@@ -222,6 +231,7 @@
   <button class="tab" data-go="send"><span class="ic">↗️</span>Send</button>
   <button class="tab" data-go="rewards"><span class="ic">🎁</span>Rewards</button>
   <button class="tab" data-go="banker" id="tab-banker"><span class="ic">🏦</span>Banker</button>
+  <button class="tab" data-go="issuer" id="tab-issuer"><span class="ic">👑</span>Issuer</button>
   <button class="tab" data-go="settings"><span class="ic">⚙️</span>More</button>
 </nav>
 
@@ -235,26 +245,28 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ---------- session ---------- */
 const SESSION_KEY = "koupon_session_v1";
-let SESSION = null; // {id, handle, pin, role, balance}
+let SESSION = null; // {id, handle, pin, role, status, balance}
 let homePoll = null;
 
 function loadSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){ return null; } }
 function saveSession(){ localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION)); }
 function clearSession(){ localStorage.removeItem(SESSION_KEY); SESSION=null; }
 function normalizeHandle(h){ h=(h||"").trim(); if(!h) return h; return h.startsWith("@")?h:"@"+h; }
+function isBankerLike(){ return SESSION && (SESSION.role==="banker" || SESSION.role==="issuer"); }
+function isSuspended(){ return SESSION && SESSION.status==="suspended"; }
 
 async function login(handle, pin){
   const { data, error } = await sb.rpc('verify_pin', { p_handle: handle, p_pin: pin });
   if(error) throw error;
   if(!data || !data.length) throw new Error("Wrong handle or PIN.");
   const row=data[0];
-  SESSION = { id: row.id, handle: row.handle, pin, role: row.role, balance: row.balance };
+  SESSION = { id: row.id, handle: row.handle, pin, role: row.role, status: row.status, balance: row.balance };
   saveSession();
   return SESSION;
 }
 
-async function createAccount(handle, pin, role, start){
-  const { error } = await sb.rpc('create_member', { p_handle: handle, p_pin: pin, p_role: role, p_start: start });
+async function createAccount(handle, pin){
+  const { error } = await sb.rpc('create_member', { p_handle: handle, p_pin: pin });
   if(error) throw error;
   return login(handle, pin);
 }
@@ -266,12 +278,15 @@ function errMsg(e){ return (e && e.message) ? e.message : "Something went wrong.
 function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function renderChrome(){
-  $("who").textContent = SESSION.handle + (SESSION.role==="banker"?" · Banker":"");
-  $("tab-banker").classList.toggle("hide", SESSION.role!=="banker");
-  $("set-info").textContent = SESSION.handle+" · "+(SESSION.role==="banker"?"Banker":"Member");
+  const roleLabel = SESSION.role==="issuer" ? " · Issuer" : SESSION.role==="banker" ? " · Banker" : "";
+  $("who").textContent = SESSION.handle + roleLabel;
+  $("tab-banker").classList.toggle("hide", !isBankerLike());
+  $("tab-issuer").classList.toggle("hide", SESSION.role!=="issuer");
+  $("set-info").textContent = SESSION.handle+" · "+(SESSION.role==="issuer"?"Issuer":SESSION.role==="banker"?"Banker":"Member")
+    + (isSuspended() ? " · Suspended" : "");
 }
 
-const VIEWS=["auth","home","send","rewards","banker","settings"];
+const VIEWS=["auth","home","send","rewards","banker","issuer","settings"];
 function go(v){
   if(homePoll){ clearInterval(homePoll); homePoll=null; }
   VIEWS.forEach(x=> $("view-"+x).classList.toggle("hide", x!==v));
@@ -279,14 +294,19 @@ function go(v){
   if(v==="home"){ refreshHome(); homePoll=setInterval(refreshHome, 12000); }
   if(v==="rewards") loadRewards();
   if(v==="banker") $("bk-lookup-result").classList.add("hide");
+  if(v==="issuer") loadIssuerList();
   window.scrollTo(0,0);
 }
 
 /* ---------- home ---------- */
 async function refreshHome(){
-  const { data, error } = await sb.from('members').select('balance').eq('id', SESSION.id).single();
-  if(!error && data){ SESSION.balance=data.balance; saveSession(); }
+  const { data, error } = await sb.from('members').select('balance,status,role').eq('id', SESSION.id).single();
+  if(!error && data){
+    SESSION.balance=data.balance; SESSION.status=data.status; SESSION.role=data.role;
+    saveSession(); renderChrome();
+  }
   $("balance").innerHTML = SESSION.balance + ' <small>KP</small>';
+  $("home-suspended").style.display = isSuspended() ? "block" : "none";
   const { data: hist, error: histErr } = await sb.from('history').select('*')
     .eq('member_id', SESSION.id).order('created_at', { ascending:false }).limit(25);
   if(!histErr) renderHistory(hist||[]);
@@ -311,6 +331,7 @@ function renderHistory(items){
 
 /* ---------- send ---------- */
 $("snd-go").onclick=async ()=>{
+  if(isSuspended()) return toast("Your account is suspended — contact your issuer.");
   const to=normalizeHandle($("snd-to").value);
   const amt=Number($("snd-amt").value);
   const note=$("snd-note").value.trim();
@@ -325,8 +346,8 @@ $("snd-go").onclick=async ()=>{
 
 /* ---------- rewards ---------- */
 async function loadRewards(){
-  $("rw-role").textContent = SESSION.role==="banker"?"Banker":"";
-  $("rw-add-card").classList.toggle("hide", SESSION.role!=="banker");
+  $("rw-role").textContent = isBankerLike() ? (SESSION.role==="issuer"?"Issuer":"Banker") : "";
+  $("rw-add-card").classList.toggle("hide", !isBankerLike());
   const { data, error } = await sb.from('rewards').select('*').order('created_at');
   if(error) return toast(errMsg(error));
   renderRewards(data||[]);
@@ -343,6 +364,7 @@ function renderRewards(rws){
   });
 }
 async function redeemReward(r){
+  if(isSuspended()) return toast("Your account is suspended — contact your issuer.");
   if(r.cost>SESSION.balance) return toast("Not enough KP for that.");
   if(!confirm("Redeem \""+r.name+"\" for "+r.cost+" KP?")) return;
   const { error } = await sb.rpc('redeem_reward', { p_handle: SESSION.handle, p_pin: SESSION.pin, p_reward_id: r.id });
@@ -424,6 +446,58 @@ function renderLookup(mem, items){
   });
 }
 
+/* ---------- issuer: roles + status ---------- */
+async function loadIssuerList(){
+  const { data, error } = await sb.from('members').select('*').order('handle');
+  if(error) return toast(errMsg(error));
+  renderIssuerList(data||[]);
+}
+function renderIssuerList(members){
+  const wrap=$("is-list"); wrap.innerHTML="";
+  members.forEach(m=>{
+    const row=document.createElement("div"); row.className="member-row";
+    const statusTag = m.status==='suspended' ? ' <span class="tag bad">suspended</span>' : '';
+    row.innerHTML = '<div style="font-weight:700">'+escapeHtml(m.handle)+statusTag+'</div>'
+      + '<div class="muted">'+m.balance+' KP · currently '+m.role+'</div>';
+
+    const roleRow=document.createElement("div"); roleRow.className="row"; roleRow.style.marginTop="10px";
+    const sel=document.createElement("select"); sel.style.flex="2";
+    ['member','banker','issuer'].forEach(r=>{
+      const o=document.createElement("option"); o.value=r; o.textContent=r;
+      if(r===m.role) o.selected=true;
+      sel.appendChild(o);
+    });
+    const saveBtn=document.createElement("button"); saveBtn.className="btn sec sm"; saveBtn.style.flex="1"; saveBtn.textContent="Save role";
+    saveBtn.onclick=async ()=>{
+      if(sel.value===m.role) return toast("No change.");
+      if(!confirm("Change "+m.handle+" to "+sel.value+"?")) return;
+      const { error } = await sb.rpc('assign_role', { p_issuer_handle: SESSION.handle, p_issuer_pin: SESSION.pin, p_target_handle: m.handle, p_new_role: sel.value });
+      if(error) return toast(errMsg(error));
+      toast(m.handle+" is now "+sel.value+" ✓");
+      loadIssuerList();
+    };
+    roleRow.appendChild(sel); roleRow.appendChild(saveBtn);
+    row.appendChild(roleRow);
+
+    const statusBtn=document.createElement("button");
+    statusBtn.className = m.status==='suspended' ? "btn sec sm" : "btn warn sm";
+    statusBtn.style.marginTop="8px"; statusBtn.style.width="100%";
+    statusBtn.textContent = m.status==='suspended' ? "Reactivate" : "Suspend";
+    statusBtn.onclick=async ()=>{
+      const newStatus = m.status==='suspended' ? 'active' : 'suspended';
+      if(!confirm((newStatus==='suspended'?"Suspend ":"Reactivate ")+m.handle+"?")) return;
+      const { error } = await sb.rpc('set_member_status', { p_issuer_handle: SESSION.handle, p_issuer_pin: SESSION.pin, p_target_handle: m.handle, p_status: newStatus });
+      if(error) return toast(errMsg(error));
+      toast(m.handle+" "+(newStatus==='suspended'?"suspended":"reactivated")+" ✓");
+      loadIssuerList();
+    };
+    row.appendChild(statusBtn);
+
+    wrap.appendChild(row);
+  });
+}
+$("is-refresh").onclick=loadIssuerList;
+
 /* ---------- settings ---------- */
 $("set-logout").onclick=()=>{ if(confirm("Log out on this phone?")){ clearSession(); location.reload(); } };
 
@@ -441,12 +515,11 @@ $("au-login").onclick=async ()=>{
 };
 $("au-create").onclick=async ()=>{
   const h=normalizeHandle($("au-handle").value), pin=$("au-pin").value.trim();
-  const role=$("au-role").value, start=Number($("au-start").value)||0;
   $("au-error").textContent="";
   if(!h||!pin) return toast("Enter a handle and PIN.");
   if(pin.length<4) return toast("PIN should be at least 4 digits.");
   try{
-    await createAccount(h, pin, role, start);
+    await createAccount(h, pin);
     $("tabs").classList.remove("hide"); renderChrome(); go("home");
   }catch(e){
     const msg=errMsg(e);
@@ -462,7 +535,7 @@ $("au-create").onclick=async ()=>{
       const { data, error } = await sb.rpc('verify_pin', { p_handle: saved.handle, p_pin: saved.pin });
       if(error || !data || !data.length) throw new Error("session invalid");
       const row=data[0];
-      SESSION = { id: row.id, handle: row.handle, pin: saved.pin, role: row.role, balance: row.balance };
+      SESSION = { id: row.id, handle: row.handle, pin: saved.pin, role: row.role, status: row.status, balance: row.balance };
       saveSession();
       $("tabs").classList.remove("hide");
       renderChrome();

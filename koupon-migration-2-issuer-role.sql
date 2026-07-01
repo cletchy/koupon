@@ -1,91 +1,38 @@
--- Koupon — lightweight synced-backend schema
--- Paste this whole file into Supabase: SQL Editor -> New query -> Run.
--- Safe to re-run: drops and recreates the three tables (fine pre-launch,
--- there's no real data yet), and functions use CREATE OR REPLACE.
+-- Koupon — migration 2: issuer role + membership status
+-- Paste into Supabase SQL Editor and run. Safe on an existing database
+-- with real accounts in it: this ALTERs in place, it does not drop
+-- members/history/rewards (unlike the original schema file, which is
+-- only for a brand-new project).
 --
--- If you already have real accounts in an existing project, do NOT run
--- this file -- it drops the tables. Use koupon-migration-2-issuer-role.sql
--- instead, which ALTERs an existing database in place.
---
--- Design notes:
--- * This is the LIGHTWEIGHT track (not the double-entry ledger blueprint in
---   koupon-ledger-design.md). Balances are simple integer columns, not
---   derived from immutable entries. Good enough for a trusted-family app;
---   revisit the heavier design if KP ever needs real audit/compliance rigor.
--- * All writes happen through SECURITY DEFINER functions below, never
---   directly against the tables. RLS on the tables blocks direct writes
---   from the client entirely, so every mutation is PIN-checked server-side.
--- * PINs are hashed with bcrypt (pgcrypto), never stored or returned in
---   plaintext.
--- * Three roles: member < banker < issuer. Only an issuer can assign
---   roles or suspend/reactivate an account (assign_role,
---   set_member_status) -- self-signup always creates an active member
---   with a fixed 100 KP, never a banker or issuer. No account starts as
---   issuer; see the bootstrap note at the bottom of this file.
--- * The old QR "backup code -> banker -> restore code" flow is gone. The
---   server keeps the full history permanently, so undoing a mistake is
---   reverse_transaction() below: banker or issuer picks the bad entry,
---   it's reversed with a linked correction entry. No codes to copy or lose.
+-- What this adds:
+-- * A third role, 'issuer', above 'banker'. Issuers can assign any
+--   role to anyone and suspend/reactivate accounts. Issuers can also
+--   do everything a banker can (issue_kp, reset_member,
+--   reverse_transaction, add_reward now accept role IN ('banker','issuer')).
+-- * A 'status' column on members ('active' / 'suspended'). Suspended
+--   accounts can't send, redeem, or (if a banker) issue/reset/reverse.
+--   Reading balance/history still works, so nothing is destroyed.
+-- * Closes two gaps in the original signup flow: new accounts can no
+--   longer self-assign 'banker', and can no longer set an arbitrary
+--   starting balance. create_member now always creates role='member'
+--   with a fixed 100 KP starting balance, regardless of what's passed
+--   in (matches the "everyone starts with a fixed 100 KP" rule from
+--   the original design brief). Role changes only happen via
+--   assign_role() by an issuer from here on.
+-- * A safety rail: you cannot demote or suspend the *last* active
+--   issuer, so there's no way to accidentally lock everyone out.
 
-create extension if not exists pgcrypto;
+-- ---------- schema changes ----------
 
--- ---------- clean slate (safe pre-launch: no real data yet) ----------
+alter table members drop constraint if exists members_role_check;
+alter table members add constraint members_role_check check (role in ('member','banker','issuer'));
 
-drop table if exists history cascade;
-drop table if exists members cascade;
-drop table if exists rewards cascade;
+alter table members add column if not exists status text not null default 'active';
+alter table members drop constraint if exists members_status_check;
+alter table members add constraint members_status_check check (status in ('active','suspended'));
 
--- ---------- tables ----------
+-- ---------- tightened create_member: always member, always 100 KP ----------
 
-create table members (
-  id uuid primary key default gen_random_uuid(),
-  handle text unique not null,
-  role text not null default 'member' check (role in ('member','banker','issuer')),
-  status text not null default 'active' check (status in ('active','suspended')),
-  pin_hash text not null,
-  balance integer not null default 0 check (balance >= 0),
-  created_at timestamptz not null default now()
-);
-
-create table history (
-  id bigserial primary key,
-  member_id uuid not null references members(id) on delete cascade,
-  dir text not null check (dir in ('in','out')),
-  kind text not null check (kind in ('transfer','mint','redeem','reset','correction')),
-  counterparty text,
-  amount integer not null check (amount > 0),
-  note text,
-  reversed boolean not null default false,
-  reverses_id bigint references history(id),
-  created_at timestamptz not null default now()
-);
-
-create table rewards (
-  id bigserial primary key,
-  name text not null,
-  cost integer not null check (cost > 0),
-  created_at timestamptz not null default now()
-);
-
--- ---------- lock the tables down; all writes go through functions below ----------
-
-alter table members enable row level security;
-alter table history enable row level security;
-alter table rewards enable row level security;
-
--- everyone (anon) can read handles/roles/balances and the log and reward
--- list -- fine for a small trusted-family app where balances aren't secret.
--- nothing is writable directly; every mutation goes through a function.
-create policy "members readable" on members for select using (true);
-create policy "history readable" on history for select using (true);
-create policy "rewards readable" on rewards for select using (true);
-
--- ---------- functions ----------
-
--- create a new member. Always an active plain member starting at a fixed
--- 100 KP -- p_role and p_start are accepted for client compatibility but
--- ignored, so self-signup can never grant banker/issuer or a chosen
--- starting balance. Role changes go through assign_role() (issuer-only).
 create or replace function create_member(p_handle text, p_pin text, p_role text default 'member', p_start integer default 100)
 returns uuid
 language plpgsql
@@ -93,6 +40,10 @@ security definer
 as $$
 declare v_id uuid;
 begin
+  -- p_role and p_start are intentionally ignored: every self-created
+  -- account is a plain, active member starting at a fixed 100 KP.
+  -- Role changes and balance corrections happen through assign_role()
+  -- and issue_kp()/reset_member(), both issuer/banker-only.
   insert into members (handle, role, pin_hash, balance, status)
   values (p_handle, 'member', crypt(p_pin, gen_salt('bf')), 100, 'active')
   returning id into v_id;
@@ -100,7 +51,8 @@ begin
 end;
 $$;
 
--- verify a handle+pin pair; returns the member row on success, no rows on failure
+-- ---------- verify_pin now also returns status ----------
+
 create or replace function verify_pin(p_handle text, p_pin text)
 returns table(id uuid, handle text, role text, status text, balance integer)
 language sql
@@ -110,9 +62,8 @@ as $$
   where handle = p_handle and pin_hash = crypt(p_pin, pin_hash);
 $$;
 
--- move KP between two members, atomically, with a row lock so concurrent
--- sends can't both pass the balance check (the double-spend guard).
--- Both sides must be active.
+-- ---------- transfer_kp: both sides must be active ----------
+
 create or replace function transfer_kp(p_from_handle text, p_from_pin text, p_to_handle text, p_amount integer, p_note text default '')
 returns void
 language plpgsql
@@ -143,8 +94,8 @@ begin
 end;
 $$;
 
--- banker or issuer mints KP to a member (start grant, monthly drip, ad hoc).
--- Caller and recipient must both be active.
+-- ---------- issue_kp: caller must be banker or issuer, both active ----------
+
 create or replace function issue_kp(p_banker_handle text, p_banker_pin text, p_to_handle text, p_amount integer, p_note text default 'Issued')
 returns void
 language plpgsql
@@ -170,8 +121,8 @@ begin
 end;
 $$;
 
--- banker or issuer sets a member's balance directly (blunt reset, e.g.
--- fresh start). History isn't erased -- a correction entry is logged.
+-- ---------- reset_member: caller must be banker or issuer ----------
+
 create or replace function reset_member(p_banker_handle text, p_banker_pin text, p_target_handle text, p_new_balance integer)
 returns void
 language plpgsql
@@ -198,7 +149,8 @@ begin
 end;
 $$;
 
--- banker or issuer reverses one specific past transaction for a member.
+-- ---------- reverse_transaction: caller must be banker or issuer ----------
+
 create or replace function reverse_transaction(p_banker_handle text, p_banker_pin text, p_history_id bigint)
 returns void
 language plpgsql
@@ -215,7 +167,6 @@ begin
   if v_row is null then raise exception 'history entry not found'; end if;
   if v_row.reversed then raise exception 'already reversed'; end if;
 
-  -- flip the effect: an 'in' entry gets debited back, an 'out' entry gets credited back
   if v_row.dir = 'in' then
     update members set balance = greatest(balance - v_row.amount, 0) where id = v_row.member_id;
   else
@@ -231,7 +182,8 @@ begin
 end;
 $$;
 
--- banker or issuer adds a reward to the shared list
+-- ---------- add_reward: caller must be banker or issuer ----------
+
 create or replace function add_reward(p_banker_handle text, p_banker_pin text, p_name text, p_cost integer)
 returns void
 language plpgsql
@@ -248,8 +200,8 @@ begin
 end;
 $$;
 
--- redeem a reward: debits the member (must be active); banker fulfills
--- the reward in person, same as before (no banker "account" holds the KP).
+-- ---------- redeem_reward: member must be active ----------
+
 create or replace function redeem_reward(p_handle text, p_pin text, p_reward_id bigint)
 returns void
 language plpgsql
@@ -272,8 +224,8 @@ begin
 end;
 $$;
 
--- issuer-only: assign any role to any member. Blocks demoting the last
--- active issuer, so admin control can never be accidentally lost.
+-- ---------- new: assign_role (issuer-only) ----------
+
 create or replace function assign_role(p_issuer_handle text, p_issuer_pin text, p_target_handle text, p_new_role text)
 returns void
 language plpgsql
@@ -301,8 +253,8 @@ begin
 end;
 $$;
 
--- issuer-only: suspend/reactivate a member. Blocks suspending the last
--- active issuer for the same reason.
+-- ---------- new: set_member_status (issuer-only) ----------
+
 create or replace function set_member_status(p_issuer_handle text, p_issuer_pin text, p_target_handle text, p_status text)
 returns void
 language plpgsql
@@ -330,17 +282,15 @@ begin
 end;
 $$;
 
--- allow the anon (public) role to call these functions; RLS on the tables
--- still blocks any direct table writes, so this is the only door in.
-grant execute on function create_member, verify_pin, transfer_kp, issue_kp,
-  reset_member, reverse_transaction, add_reward, redeem_reward,
-  assign_role, set_member_status
-  to anon;
+-- ---------- grants ----------
+
+grant execute on function assign_role, set_member_status to anon;
 
 -- ---------- one-time bootstrap: promote your own account to issuer ----------
--- No account is an issuer after this script runs -- there's no issuer yet
--- to promote anyone else, by design. Create your account through the app
--- first (it'll be a normal member), then run this once with your own
--- handle to become the first issuer:
+-- No account is an issuer yet after this migration -- there's no issuer to
+-- promote anyone else, by design. Run this once, with your own handle, to
+-- become the first issuer. Uncomment and edit the handle below, then run
+-- just this one line separately (after the rest of the script above has
+-- already succeeded):
 
 -- update members set role = 'issuer' where handle = '@tania';
