@@ -162,4 +162,4 @@ Still open (from the brief, not blocking the backend build):
 
 ## 9. Next step
 
-With this model agreed, the first code is the **backend ledger service**: the schema above, the six transaction types as atomic operations, the invariants enforced in code, and a test suite that tries to violate each invariant and proves it can't. The activity state machine sits on top of the escrow transactions. Only once that is green does the API surface — and then the React Native app — become worth building.
+With this m

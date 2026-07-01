@@ -4,13 +4,13 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 ## Files in this folder
 
-- **`koupon-pilot.html`** — the app. A single, self-contained file. This is all you need to run it.
+- **`index.html`** — the app. A single, self-contained file. This is all you need to run it. (Named `index.html` so GitHub Pages serves it automatically at the site root.)
 - **`README.md`** — this guide.
 - **`koupon-requirements-brief.md`** and **`koupon-ledger-design.md`** — design blueprints for a *future real-money version*. Not needed to run the app; kept in case the pilot takes off.
 
 ## Running it
 
-**Simplest way (works anywhere, no setup):** open `koupon-pilot.html` on each family member's iPhone — email it to yourself, or open it from the Files app — and tap **Add to Home Screen** so it's easy to reopen. On first run, pick a handle (e.g. `@tania`) and you start with 100 KP.
+**Simplest way (works anywhere, no setup):** open `index.html` on each family member's iPhone — email it to yourself, or open it from the Files app — and tap **Add to Home Screen** so it's easy to reopen. On first run, pick a handle (e.g. `@tania`) and you start with 100 KP.
 
 **To pay someone:** tap **Send**, enter the amount, and show them the QR. They tap **Receive** and scan it — or, if scanning isn't available, you tap **Copy code**, share that text with them (any way you like), and they paste it into the **Receive** box. The KP moves from your phone to theirs.
 
@@ -26,4 +26,4 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 - **Back up now and then.** Phones can clear browser storage after long disuse, which would wipe a balance. Use **More → Copy my backup** occasionally and keep the text somewhere safe; **Restore** pastes it back.
 - **It's honour-system.** Balances live only on each phone with no central record, so it relies on everyone playing fair — which is the point for a family game. (The blueprints describe what a tamper-proof, real-money version would take.)
-- **No internet needed for a payment.** The transfer itself is just a QR/code between two phones. Internet is only used to load the page and, optionally, the camera scanner.
+- **No internet needed for a payment.** The transfer itself is just a QR/code between two phones. Internet is

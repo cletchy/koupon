@@ -112,12 +112,4 @@ These are deliberately undecided and must not be silently assumed during design:
 - **Grand prize mechanism.** Fixed high price, periodic raffle, auction, or something else? Amount TBD.
 - **Dispute resolution for escrowed activities.** Manual arbitration by the issuer, mutual-confirmation timeout, or a fuller dispute flow?
 - **Reward pricing strategy.** How reward costs are set and adjusted relative to the issuance rate.
-- **Merchant KP balances.** Confirm merchants hold no KP and only a fiat reimbursement claim (Section 4).
-- **Offline redemption / activity confirmation.** Must any of this work without connectivity?
-- **Scale at launch.** Expected users and transaction volume, which shape ledger and infrastructure choices.
-
----
-
-## 9. Next step
-
-With this brief agreed, the first architecture task is the **ledger and escrow model** — an append-only, balance-correct transaction system that also supports holding KP between activity agreement and completion. Every other feature depends on it.
+- **Merchant KP balances.** Confirm merchants hold no KP
