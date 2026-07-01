@@ -1,36 +1,39 @@
-# Koupon — Family Pilot 
+# Koupon — Family App
 (https://cletchy.github.io/koupon)
 
-A small, just-for-fun app for sharing a play currency called **koupon (KP)** among family. Each phone keeps its own balance, and you pay each other in person with a QR code (or a copy-paste code). There is no server and nothing leaves your phone — it runs on the honour system, for fun, not for real money.
+A small, just-for-fun app for sharing a play currency called **koupon (KP)** among family. Balances live on a shared backend (Supabase), so every phone sees the same numbers instantly — no more copying codes or scanning QR to move KP around. Still honour-system economically (no real money involved), just no longer fragile to a single phone's local storage.
+
+> **Earlier version:** this app used to be a fully offline, single-device pilot (QR/paste-code transfers, `localStorage` only). That version is retired — see git history if you ever need it back. `koupon-lightweight-schema.sql` in this folder is the Postgres schema for the current backend.
 
 ## Files in this folder
 
-- **`index.html`** — the app. A single, self-contained file. This is all you need to run it. (Named `index.html` so GitHub Pages serves it automatically at the site root.)
+- **`index.html`** — the app. A single, self-contained file that talks to Supabase. This is all you need to run it. (Named `index.html` so GitHub Pages serves it automatically at the site root.)
+- **`koupon-lightweight-schema.sql`** — the database schema (tables + functions) this app runs against. Only needed if you're standing up a new Supabase project from scratch.
 - **`README.md`** — this guide.
-- **`koupon-requirements-brief.md`** and **`koupon-ledger-design.md`** — design blueprints for a *future real-money version*. Not needed to run the app; kept in case the pilot takes off.
+- **`koupon-requirements-brief.md`** and **`koupon-ledger-design.md`** — design blueprints for a *heavier, real-money-grade version* (double-entry ledger, escrow, phone-OTP auth). Not what's running today; kept in case KP ever needs to carry real value and that rigour becomes necessary.
 
 ## Running it
 
-**Simplest way (works anywhere, no setup):** open `index.html` on each family member's iPhone — email it to yourself, or open it from the Files app — and tap **Add to Home Screen** so it's easy to reopen. On first run, pick a handle (e.g. `@tania`) and you start with 100 KP.
+Open `index.html` on each family member's iPhone — email it to yourself, or open it from the Files app — and tap **Add to Home Screen** so it's easy to reopen. No camera permission or `https://` hosting requirement anymore (that was only ever needed for QR scanning, which is gone).
 
-**To pay someone:** tap **Send**, enter the amount, and show them the QR. They tap **Receive** and scan it — or, if scanning isn't available, you tap **Copy code**, share that text with them (any way you like), and they paste it into the **Receive** box. The KP moves from your phone to theirs.
+**First time on a phone:** pick a handle (e.g. `@tania`) and a PIN, choose your role, and tap **Create new account**. If you already have an account (made on another phone, or the family banker made it for you), just enter your handle and PIN and tap **Log in** instead — your balance and history come with you to any device.
 
-**For camera scanning to work,** the app needs to be opened over an `https://` link (an Apple rule). If you just open the file directly, the camera stays off — but the **paste-a-code** method works everywhere, so the app is fully usable either way. If you want tap-and-scan, put this one file on any free static host (e.g. GitHub Pages or a Netlify drop) and open that link on each phone. No data goes to the host; it only serves the page.
+**To pay someone:** tap **Send**, type their handle and an amount, hit **Send**. It's instant — nothing to show or scan.
 
 ## Roles
 
-**Banker.** One person sets their role to **Banker** during setup (or anyone can — it just unlocks the Banker tab). The banker issues KP: the starting 100, the monthly +5, or any custom amount. They create a code and the family member scans/pastes it to receive it.
+**Banker.** Set at account creation. The banker issues KP directly — the starting 100, the monthly +5, or any custom amount — straight into a member's account from the **Banker** tab. No code exchange.
 
-**Resets and restores are banker-only.** Members have no self-service reset on their phone at all — there's no "erase everything" button in Settings anymore. Only the banker can fix an account, in one of two ways, both from the Banker tab:
+**Fixing an account is banker-only,** two ways, both from the Banker tab:
 
-- **Reset a member.** The banker picks a handle and a target balance, creates a **reset code**, and the member scans/pastes it on their own phone. That clears the member's balance back to the target amount and wipes their history — handle, role, and rewards stay.
-- **Restore a member's backup.** A backup code is copied to a member's clipboard automatically right before every transaction (send, receive, or redeem) and stashed under **More → Copy backup from before my last transaction** as a fallback. If a member wants a transaction undone, they send that code to the banker, who pastes it into **Restore a member's backup** to generate a restore code. The member scans/pastes it on their own Receive tab and their account rolls back to exactly that pre-transaction snapshot — balance, history, everything.
+- **Reset a member.** Sets a member's balance to a chosen number directly. History isn't erased — a "reset" entry is logged alongside everything else, so there's always a record of what changed and why.
+- **Undo a transaction.** Look up any member's recent activity and reverse one specific entry. This replaces the old backup-code/restore-QR workaround entirely — since the server keeps the full log permanently, "undo" is just picking the bad entry and reversing it. Nothing to copy, nothing that can get lost.
 
-**Rewards.** The banker adds rewards (a name and a KP cost) on the **Rewards** tab. To claim one, a family member taps **Redeem**, which creates a code that sends the KP back to the banker — who then gives them the reward in real life.
+**Rewards.** The banker adds rewards (a name and a KP cost) on the **Rewards** tab, visible to everyone. A family member taps **Redeem**, which debits their balance immediately — they then collect the reward from the banker in person.
 
 ## Good to know
 
-- **A backup is copied automatically before every transaction.** No need to remember to do this — it happens silently on your clipboard right as you send, receive, or redeem. If you ever need something undone, that's the code to send your banker (or grab it again from **More → Copy backup from before my last transaction**).
-- **`More → Copy my backup`** grabs a fresh snapshot any time, useful before switching phones. There's no matching self-service "Restore" anymore — all restores go through the banker (see Roles above), by design.
-- **It's honour-system.** Balances live only on each phone with no central record, so it relies on everyone playing fair — which is the point for a family game. (The blueprints describe what a tamper-proof, real-money version would take.)
-- **No internet needed for a payment.** The transfer itself is just a QR/code between two phones. Internet is only used to load the page and, optionally, the camera scanner.
+- **PIN, not a password.** Each account has a short PIN (4-6 digits) chosen at creation, checked server-side on every action. It's there so one phone can't act as someone else's handle — not meant to withstand real attacks, just honest mistakes and impersonation, appropriate for a trusted-family app.
+- **Balances sync automatically.** Home refreshes on a short timer while you're on it, plus a manual **Refresh** button, so activity from other phones shows up without you doing anything.
+- **Data lives on Supabase now, not on your phone.** Losing or replacing a phone just means logging in again elsewhere with the same handle and PIN — nothing to back up or restore manually.
+- **Not audited/tamper-proof.** Balances are plain integer columns, not a double-entry ledger — fine for a family game, not the rigour of `koupon-ledger-design.md`. Revisit that blueprint if KP ever needs to be trustworthy at a level beyond "we trust each other."
