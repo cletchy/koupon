@@ -212,6 +212,22 @@
       <div class="code" id="bk-code"></div>
       <button class="btn sec sm" style="width:100%;margin-top:10px" id="bk-copy">Copy code</button>
     </div>
+    <div class="card">
+      <h2>Reset a member ⚠️</h2>
+      <p class="muted">Create a reset code. They scan or paste it on their own phone to reset their balance and clear their history — only the banker can create this code. (A full wipe of handle/rewards is still done from that person's own Settings tab.)</p>
+      <label>Member handle (optional)</label>
+      <input id="bk-reset-to" placeholder="@name" autocapitalize="none" />
+      <label>Reset balance to (KP)</label>
+      <input id="bk-reset-amt" type="number" inputmode="numeric" value="100" />
+      <button class="btn warn" id="bk-reset-go" style="margin-top:12px">Create reset code</button>
+    </div>
+    <div class="card hide" id="bkr-result">
+      <h2 class="center">Have them scan this</h2>
+      <p class="muted center" id="bkr-summary"></p>
+      <div id="qrbox-bkr" style="display:flex;justify-content:center;padding:14px;background:#fff;border-radius:14px"></div>
+      <div class="code" id="bkr-code"></div>
+      <button class="btn sec sm" style="width:100%;margin-top:10px" id="bkr-copy">Copy code</button>
+    </div>
   </section>
 
   <!-- SETTINGS -->
@@ -254,7 +270,12 @@ function decodeToken(s){
   s=(s||"").trim();
   if(!s.startsWith(PREFIX)) throw new Error("That isn't a koupon code.");
   const t = JSON.parse(decodeURIComponent(escape(atob(s.slice(PREFIX.length)))));
-  if(typeof t.amount!=="number" || !(t.amount>0) || !t.id) throw new Error("This code looks invalid.");
+  if(!t.id) throw new Error("This code looks invalid.");
+  if(t.type==="reset"){
+    if(typeof t.amount!=="number" || t.amount<0) throw new Error("This code looks invalid.");
+  } else {
+    if(typeof t.amount!=="number" || !(t.amount>0)) throw new Error("This code looks invalid.");
+  }
   return t;
 }
 // returns {balance, applied} or throws
@@ -283,7 +304,7 @@ function go(v){
   if(v==="send") resetSend();
   if(v==="receive") startScan();
   if(v==="rewards") renderRewards();
-  if(v==="banker") $("bk-result").classList.add("hide");
+  if(v==="banker"){ $("bk-result").classList.add("hide"); $("bkr-result").classList.add("hide"); }
   if(v==="settings") $("set-info").textContent = S.handle+" · "+(S.role==="banker"?"Banker":"Member");
   window.scrollTo(0,0);
 }
@@ -333,6 +354,15 @@ $("snd-go").onclick=()=>{
 /* ---------- receive ---------- */
 function receiveCode(raw){
   let t; try{ t=decodeToken(raw); }catch(e){ return toast(e.message); }
+  if(t.type==="reset"){
+    if(S.applied.includes(t.id)) return toast("This code was already used.");
+    if(!confirm("Your banker wants to reset your account to "+t.amount+" KP. This clears your balance and history. Continue?")) return;
+    S.balance=t.amount; S.history=[]; S.applied=[t.id];
+    pushHistory({dir:"in", kind:"reset", from:t.from||"banker", amount:t.amount, note:"Account reset by banker", ts:Date.now()});
+    save(); render();
+    toast("Account reset ✓");
+    return go("home");
+  }
   let r; try{ r=applyIncoming(S,t); }catch(e){ return toast(e.message); }
   S.balance=r.balance; S.applied.push(r.id);
   pushHistory({dir:"in", kind:(t.type==="grant"?"mint":"transfer"), from:t.from, amount:t.amount, note:t.note, ts:Date.now()});
@@ -405,6 +435,23 @@ function bankerIssue(amount){
 $("bk-start").onclick=()=>bankerIssue(100);
 $("bk-month").onclick=()=>bankerIssue(5);
 $("bk-custom").onclick=()=>{ const a=Number($("bk-amt").value); if(!(a>0)) return toast("Enter an amount."); bankerIssue(a); $("bk-amt").value=""; };
+
+function bankerReset(amount, to){
+  const t=makeToken({type:"reset", from:"banker", to, amount});
+  const code=encodeToken(t);
+  $("bkr-summary").textContent = "Reset "+(to?to:"their")+" balance to "+amount+" KP";
+  $("bkr-code").textContent=code;
+  const b=$("qrbox-bkr"); b.innerHTML=""; try{ new QRCode(b,{text:code,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
+  $("bkr-result").classList.remove("hide");
+  $("bkr-copy").onclick=()=>copy(code);
+}
+$("bk-reset-go").onclick=()=>{
+  const to=$("bk-reset-to").value.trim()||null;
+  const raw=$("bk-reset-amt").value;
+  const amt=raw===""?100:Number(raw);
+  if(!(amt>=0)) return toast("Enter a valid amount.");
+  bankerReset(amt, to);
+};
 
 /* ---------- settings ---------- */
 $("set-export").onclick=()=>copy(JSON.stringify(S));

@@ -21,6 +21,8 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 **Banker.** One person sets their role to **Banker** during setup (or anyone can — it just unlocks the Banker tab). The banker issues KP: the starting 100, the monthly +5, or any custom amount. They create a code and the family member scans/pastes it to receive it.
 
+**Resetting a member's account.** Only the banker can do this, and only via the Banker tab (members don't see this option). The banker picks a handle and a target balance, creates a **reset code**, and the member scans/pastes it on their own phone. That clears the member's balance back to the target amount and wipes their transaction history — their handle, role, and rewards list are untouched. (A full wipe of everything, including handle, is still a self-service option under that person's own **More → Reset everything**.)
+
 **Rewards.** The banker adds rewards (a name and a KP cost) on the **Rewards** tab. To claim one, a family member taps **Redeem**, which creates a code that sends the KP back to the banker — who then gives them the reward in real life.
 
 ## Good to know
