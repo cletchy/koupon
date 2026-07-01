@@ -27,4 +27,4 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 - **Back up now and then.** Phones can clear browser storage after long disuse, which would wipe a balance. Use **More → Copy my backup** occasionally and keep the text somewhere safe; **Restore** pastes it back.
 - **It's honour-system.** Balances live only on each phone with no central record, so it relies on everyone playing fair — which is the point for a family game. (The blueprints describe what a tamper-proof, real-money version would take.)
-- **No internet needed for a payment.** The transfer itself is just a Q
+- **No internet needed for a payment.** The transfer itself is just a QR/code between two phones. Internet is only used to load the page and, optionally, the camera scanner.
