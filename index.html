@@ -174,9 +174,10 @@
       <p class="muted">Issue koupon directly — it lands in their account immediately.</p>
       <label>Issue to (handle)</label>
       <input id="bk-to" placeholder="@name" autocapitalize="none" />
-      <div class="row" style="margin-top:12px">
+      <p class="muted" style="margin-top:10px">Everyone active gets +5 KP automatically every Monday now — this is just for a manual top-up.</p>
+      <div class="row" style="margin-top:8px">
         <button class="btn sec" id="bk-start">Issue start (100)</button>
-        <button class="btn sec" id="bk-month">Monthly (+5)</button>
+        <button class="btn sec" id="bk-month">Bonus (+5)</button>
       </div>
       <label style="margin-top:14px">Custom amount</label>
       <input id="bk-amt" type="number" inputmode="numeric" placeholder="0" />
@@ -210,6 +211,11 @@
       <h2>Issuer tools 👑</h2>
       <p class="muted">Assign roles and control membership status for everyone on Koupon. You can't demote or suspend the last active issuer.</p>
       <button class="btn sec" id="is-refresh" style="margin-top:4px">Refresh member list</button>
+    </div>
+    <div class="card">
+      <h2>Weekly drip 💧</h2>
+      <p class="muted">Every active account gets +5 KP automatically each Monday. Safe to press below even if it already ran this week — it just won't pay twice.</p>
+      <button class="btn sec" id="is-drip-now" style="margin-top:8px">Run this week's drip now</button>
     </div>
     <div id="is-list"></div>
   </section>
@@ -497,6 +503,14 @@ function renderIssuerList(members){
   });
 }
 $("is-refresh").onclick=loadIssuerList;
+
+$("is-drip-now").onclick=async ()=>{
+  const { data, error } = await sb.rpc('run_weekly_drip_now', { p_issuer_handle: SESSION.handle, p_issuer_pin: SESSION.pin });
+  if(error) return toast(errMsg(error));
+  const n = Number(data)||0;
+  toast(n>0 ? "Dripped +5 KP to "+n+" account"+(n===1?"":"s")+" ✓" : "Already ran this week — nobody left to pay.");
+  loadIssuerList();
+};
 
 /* ---------- settings ---------- */
 $("set-logout").onclick=()=>{ if(confirm("Log out on this phone?")){ clearSession(); location.reload(); } };
