@@ -214,7 +214,7 @@
     </div>
     <div class="card">
       <h2>Reset a member ⚠️</h2>
-      <p class="muted">Create a reset code. They scan or paste it on their own phone to reset their balance and clear their history — only the banker can create this code. (A full wipe of handle/rewards is still done from that person's own Settings tab.)</p>
+      <p class="muted">Create a reset code. They scan or paste it on their own phone to reset their balance and clear their history — only the banker can create this code.</p>
       <label>Member handle (optional)</label>
       <input id="bk-reset-to" placeholder="@name" autocapitalize="none" />
       <label>Reset balance to (KP)</label>
@@ -228,22 +228,34 @@
       <div class="code" id="bkr-code"></div>
       <button class="btn sec sm" style="width:100%;margin-top:10px" id="bkr-copy">Copy code</button>
     </div>
+    <div class="card">
+      <h2>Restore a member's backup ↩️</h2>
+      <p class="muted">A backup code is copied to a member's clipboard automatically before every transaction. If they need one undone, they send you that code — paste it here to create a restore code. They scan or paste it on their own Receive tab to roll their account back to exactly that point.</p>
+      <label>Their backup code</label>
+      <input id="bk-restore-code" placeholder="Paste their backup code" autocapitalize="none" />
+      <button class="btn warn" id="bk-restore-go" style="margin-top:12px">Create restore code</button>
+    </div>
+    <div class="card hide" id="bkres-result">
+      <h2 class="center">Have them scan this</h2>
+      <p class="muted center" id="bkres-summary"></p>
+      <div id="qrbox-bkres" style="display:flex;justify-content:center;padding:14px;background:#fff;border-radius:14px"></div>
+      <div class="code" id="bkres-code"></div>
+      <button class="btn sec sm" style="width:100%;margin-top:10px" id="bkres-copy">Copy code</button>
+    </div>
   </section>
 
   <!-- SETTINGS -->
   <section id="view-settings" class="hide">
     <div class="card">
       <h2>Backup</h2>
-      <p class="muted">Your data lives only on this phone. Copy your backup somewhere safe — if the browser clears its storage, you can paste it back.</p>
+      <p class="muted">Your data lives only on this phone. A backup code is copied to your clipboard automatically before every transaction — if something ever needs to be undone, send that code to your banker.</p>
       <button class="btn sec" id="set-export">Copy my backup</button>
-      <label style="margin-top:14px">Restore from backup</label>
-      <input id="set-import" placeholder="Paste backup here" autocapitalize="none" />
-      <button class="btn sec" id="set-restore" style="margin-top:10px">Restore</button>
+      <button class="btn sec" id="set-last-backup" style="margin-top:10px">Copy backup from before my last transaction</button>
     </div>
     <div class="card">
       <h2>This phone</h2>
       <p class="muted" id="set-info"></p>
-      <button class="btn warn" id="set-reset" style="margin-top:8px">Reset everything</button>
+      <p class="muted" style="margin-top:8px">Resets and restores are handled by your banker. If your account ever needs correcting, they'll send you a code to scan on your Receive tab — there's no self-service reset on this phone.</p>
     </div>
   </section>
 </div>
@@ -264,7 +276,7 @@
 /* ---------- core logic (pure, testable) ---------- */
 const PREFIX = "KPN1.";
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
-function makeToken(o){ return { v:1, id:uid(), type:o.type, from:o.from||null, to:o.to||null, amount:Number(o.amount), note:o.note||"", ts:Date.now() }; }
+function makeToken(o){ return { v:1, id:uid(), type:o.type, from:o.from||null, to:o.to||null, amount:Number(o.amount), note:o.note||"", ts:Date.now(), snapshot:o.snapshot||undefined }; }
 function encodeToken(t){ return PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(t)))); }
 function decodeToken(s){
   s=(s||"").trim();
@@ -273,6 +285,8 @@ function decodeToken(s){
   if(!t.id) throw new Error("This code looks invalid.");
   if(t.type==="reset"){
     if(typeof t.amount!=="number" || t.amount<0) throw new Error("This code looks invalid.");
+  } else if(t.type==="restore"){
+    if(!t.snapshot || typeof t.snapshot!=="object" || !t.snapshot.handle) throw new Error("This code looks invalid.");
   } else {
     if(typeof t.amount!=="number" || !(t.amount>0)) throw new Error("This code looks invalid.");
   }
@@ -286,11 +300,22 @@ function applyIncoming(state, t){
 
 /* ---------- app state ---------- */
 const KEY="koupon_state_v1";
+const LAST_BACKUP_KEY="koupon_last_txn_backup_v1";
 let S=null, scanner=null;
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
 function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
 function fresh(handle, role, start){
   return { handle, role, balance:Number(start)||0, history:[], rewards:[], applied:[] };
+}
+// silently copies the current state to the clipboard and stashes it locally,
+// so a member always has a pre-transaction snapshot to send their banker if
+// something needs undoing.
+function backupSnapshot(){
+  const snap=Object.assign({}, S, {backedUpAt:Date.now()});
+  const text=JSON.stringify(snap);
+  try{ localStorage.setItem(LAST_BACKUP_KEY, text); }catch(e){}
+  try{ navigator.clipboard?.writeText(text); }catch(e){}
+  return text;
 }
 
 /* ---------- ui helpers ---------- */
@@ -304,7 +329,7 @@ function go(v){
   if(v==="send") resetSend();
   if(v==="receive") startScan();
   if(v==="rewards") renderRewards();
-  if(v==="banker"){ $("bk-result").classList.add("hide"); $("bkr-result").classList.add("hide"); }
+  if(v==="banker"){ $("bk-result").classList.add("hide"); $("bkr-result").classList.add("hide"); $("bkres-result").classList.add("hide"); }
   if(v==="settings") $("set-info").textContent = S.handle+" · "+(S.role==="banker"?"Banker":"Member");
   window.scrollTo(0,0);
 }
@@ -341,6 +366,7 @@ $("snd-go").onclick=()=>{
   if(!(amt>0)) return toast("Enter an amount.");
   if(amt>S.balance) return toast("Not enough KP.");
   const to=$("snd-to").value.trim()||null, note=$("snd-note").value.trim();
+  backupSnapshot();
   const t=makeToken({type:"transfer", from:S.handle, to, amount:amt, note});
   S.balance-=amt; pushHistory({dir:"out", kind:"transfer", to, amount:amt, note, ts:t.ts}); save(); render();
   const code=encodeToken(t);
@@ -348,7 +374,7 @@ $("snd-go").onclick=()=>{
   $("snd-code").textContent=code; showQR("qrbox",code);
   $("snd-result").classList.remove("hide");
   $("snd-copy").onclick=()=>copy(code);
-  toast("Payment created — show the QR.");
+  toast("Backup copied · payment created — show the QR.");
 };
 
 /* ---------- receive ---------- */
@@ -363,11 +389,25 @@ function receiveCode(raw){
     toast("Account reset ✓");
     return go("home");
   }
+  if(t.type==="restore"){
+    if(S.applied && S.applied.includes(t.id)) return toast("This code was already used.");
+    const snap=t.snapshot;
+    const when = snap.backedUpAt ? new Date(snap.backedUpAt).toLocaleString() : "a saved point";
+    if(!confirm("Your banker wants to restore your account to your backup from "+when+" (balance "+snap.balance+" KP). This replaces your current balance and history. Continue?")) return;
+    S=Object.assign({}, snap);
+    if(!Array.isArray(S.applied)) S.applied=[];
+    S.applied.push(t.id);
+    pushHistory({dir:"in", kind:"restore", from:t.from||"banker", amount:S.balance, note:"Restored by banker", ts:Date.now()});
+    save(); render();
+    toast("Account restored ✓");
+    return go("home");
+  }
   let r; try{ r=applyIncoming(S,t); }catch(e){ return toast(e.message); }
+  backupSnapshot();
   S.balance=r.balance; S.applied.push(r.id);
   pushHistory({dir:"in", kind:(t.type==="grant"?"mint":"transfer"), from:t.from, amount:t.amount, note:t.note, ts:Date.now()});
   save(); render();
-  toast("Added "+t.amount+" KP ✓");
+  toast("Backup copied · added "+t.amount+" KP ✓");
   go("home");
 }
 $("rcv-go").onclick=()=>{ const v=$("rcv-code").value; if(!v.trim()) return toast("Paste a code first."); receiveCode(v); $("rcv-code").value=""; };
@@ -403,6 +443,7 @@ function renderRewards(){
 }
 function redeem(r){
   if(r.cost>S.balance) return toast("Not enough KP for that.");
+  backupSnapshot();
   const t=makeToken({type:"transfer", from:S.handle, to:"banker", amount:r.cost, note:"Redeem: "+r.name});
   S.balance-=r.cost; pushHistory({dir:"out", kind:"redeem", to:"banker", amount:r.cost, note:"Redeem: "+r.name, ts:t.ts}); save(); render();
   const code=encodeToken(t);
@@ -410,7 +451,7 @@ function redeem(r){
   $("snd-summary").textContent="Redeem "+r.name+" — "+r.cost+" KP to banker";
   $("snd-code").textContent=code; showQR("qrbox",code); $("snd-result").classList.remove("hide");
   $("snd-copy").onclick=()=>copy(code);
-  toast("Show this to the banker.");
+  toast("Backup copied · show this to the banker.");
 }
 $("rw-add").onclick=()=>{
   const name=$("rw-name").value.trim(), cost=Number($("rw-cost").value);
@@ -453,13 +494,33 @@ $("bk-reset-go").onclick=()=>{
   bankerReset(amt, to);
 };
 
-/* ---------- settings ---------- */
-$("set-export").onclick=()=>copy(JSON.stringify(S));
-$("set-restore").onclick=()=>{
-  try{ const d=JSON.parse($("set-import").value); if(!d.handle) throw 0; S=d; save(); render(); toast("Restored ✓"); go("home"); }
-  catch(e){ toast("That backup didn't read correctly."); }
+function bankerRestore(rawBackup){
+  let snap;
+  try{ snap=JSON.parse(rawBackup); if(!snap || !snap.handle) throw 0; }
+  catch(e){ return toast("That backup code didn't read correctly."); }
+  const t=makeToken({type:"restore", from:"banker", to:snap.handle, amount:Number(snap.balance)||0, snapshot:snap});
+  const code=encodeToken(t);
+  $("bkres-summary").textContent = "Restore "+snap.handle+" to "+(Number(snap.balance)||0)+" KP"
+    + (snap.backedUpAt ? " (backup from "+new Date(snap.backedUpAt).toLocaleString()+")" : "");
+  $("bkres-code").textContent=code;
+  const b=$("qrbox-bkres"); b.innerHTML=""; try{ new QRCode(b,{text:code,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
+  $("bkres-result").classList.remove("hide");
+  $("bkres-copy").onclick=()=>copy(code);
+}
+$("bk-restore-go").onclick=()=>{
+  const raw=$("bk-restore-code").value.trim();
+  if(!raw) return toast("Paste their backup code first.");
+  bankerRestore(raw);
+  $("bk-restore-code").value="";
 };
-$("set-reset").onclick=()=>{ if(confirm("Erase everything on this phone?")){ localStorage.removeItem(KEY); location.reload(); } };
+
+/* ---------- settings ---------- */
+$("set-export").onclick=()=>copy(JSON.stringify(Object.assign({}, S, {backedUpAt:Date.now()})));
+$("set-last-backup").onclick=()=>{
+  const b=localStorage.getItem(LAST_BACKUP_KEY);
+  if(!b) return toast("No transaction backup saved yet.");
+  copy(b);
+};
 
 /* ---------- misc ---------- */
 function copy(text){ navigator.clipboard?.writeText(text).then(()=>toast("Copied ✓"),()=>toast("Copy failed")); }

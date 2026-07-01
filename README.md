@@ -21,12 +21,16 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 **Banker.** One person sets their role to **Banker** during setup (or anyone can — it just unlocks the Banker tab). The banker issues KP: the starting 100, the monthly +5, or any custom amount. They create a code and the family member scans/pastes it to receive it.
 
-**Resetting a member's account.** Only the banker can do this, and only via the Banker tab (members don't see this option). The banker picks a handle and a target balance, creates a **reset code**, and the member scans/pastes it on their own phone. That clears the member's balance back to the target amount and wipes their transaction history — their handle, role, and rewards list are untouched. (A full wipe of everything, including handle, is still a self-service option under that person's own **More → Reset everything**.)
+**Resets and restores are banker-only.** Members have no self-service reset on their phone at all — there's no "erase everything" button in Settings anymore. Only the banker can fix an account, in one of two ways, both from the Banker tab:
+
+- **Reset a member.** The banker picks a handle and a target balance, creates a **reset code**, and the member scans/pastes it on their own phone. That clears the member's balance back to the target amount and wipes their history — handle, role, and rewards stay.
+- **Restore a member's backup.** A backup code is copied to a member's clipboard automatically right before every transaction (send, receive, or redeem) and stashed under **More → Copy backup from before my last transaction** as a fallback. If a member wants a transaction undone, they send that code to the banker, who pastes it into **Restore a member's backup** to generate a restore code. The member scans/pastes it on their own Receive tab and their account rolls back to exactly that pre-transaction snapshot — balance, history, everything.
 
 **Rewards.** The banker adds rewards (a name and a KP cost) on the **Rewards** tab. To claim one, a family member taps **Redeem**, which creates a code that sends the KP back to the banker — who then gives them the reward in real life.
 
 ## Good to know
 
-- **Back up now and then.** Phones can clear browser storage after long disuse, which would wipe a balance. Use **More → Copy my backup** occasionally and keep the text somewhere safe; **Restore** pastes it back.
+- **A backup is copied automatically before every transaction.** No need to remember to do this — it happens silently on your clipboard right as you send, receive, or redeem. If you ever need something undone, that's the code to send your banker (or grab it again from **More → Copy backup from before my last transaction**).
+- **`More → Copy my backup`** grabs a fresh snapshot any time, useful before switching phones. There's no matching self-service "Restore" anymore — all restores go through the banker (see Roles above), by design.
 - **It's honour-system.** Balances live only on each phone with no central record, so it relies on everyone playing fair — which is the point for a family game. (The blueprints describe what a tamper-proof, real-money version would take.)
 - **No internet needed for a payment.** The transfer itself is just a QR/code between two phones. Internet is only used to load the page and, optionally, the camera scanner.
