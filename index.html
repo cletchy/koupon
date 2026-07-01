@@ -386,4 +386,51 @@ $("rw-add").onclick=()=>{
   const name=$("rw-name").value.trim(), cost=Number($("rw-cost").value);
   if(!name) return toast("Name the reward.");
   if(!(cost>0)) return toast("Set a cost.");
-  S.rewards.push({name,cost}); save(); $("rw-n
+  S.rewards.push({name,cost}); save(); $("rw-name").value=""; $("rw-cost").value=""; renderRewards(); toast("Reward added.");
+};
+
+/* ---------- banker ---------- */
+function bankerIssue(amount){
+  const to=$("bk-to").value.trim()||null;
+  const t=makeToken({type:"grant", from:"banker", to, amount});
+  const code=encodeToken(t);
+  $("bk-summary").textContent = "Issue "+amount+" KP"+(to?" to "+to:"");
+  $("bk-code").textContent=code;
+  const b=$("qrbox-bk"); b.innerHTML=""; try{ new QRCode(b,{text:code,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
+  $("bk-result").classList.remove("hide");
+  $("bk-copy").onclick=()=>copy(code);
+  pushHistory({dir:"out", kind:"mint", to, amount, note:"Issued", ts:t.ts}); // banker log only
+  save(); render();
+}
+$("bk-start").onclick=()=>bankerIssue(100);
+$("bk-month").onclick=()=>bankerIssue(5);
+$("bk-custom").onclick=()=>{ const a=Number($("bk-amt").value); if(!(a>0)) return toast("Enter an amount."); bankerIssue(a); $("bk-amt").value=""; };
+
+/* ---------- settings ---------- */
+$("set-export").onclick=()=>copy(JSON.stringify(S));
+$("set-restore").onclick=()=>{
+  try{ const d=JSON.parse($("set-import").value); if(!d.handle) throw 0; S=d; save(); render(); toast("Restored ✓"); go("home"); }
+  catch(e){ toast("That backup didn't read correctly."); }
+};
+$("set-reset").onclick=()=>{ if(confirm("Erase everything on this phone?")){ localStorage.removeItem(KEY); location.reload(); } };
+
+/* ---------- misc ---------- */
+function copy(text){ navigator.clipboard?.writeText(text).then(()=>toast("Copied ✓"),()=>toast("Copy failed")); }
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+document.querySelectorAll(".tab").forEach(b=> b.onclick=()=>go(b.dataset.go));
+
+/* ---------- boot ---------- */
+$("su-go").onclick=()=>{
+  let h=$("su-handle").value.trim(); if(!h) return toast("Pick a handle.");
+  if(!h.startsWith("@")) h="@"+h;
+  S=fresh(h, $("su-role").value, $("su-start").value); save();
+  $("tabs").classList.remove("hide"); render(); go("home");
+};
+(function boot(){
+  S=load();
+  if(S && S.handle){ $("tabs").classList.remove("hide"); render(); go("home"); }
+  else { go("setup"); }
+})();
+</script>
+</body>
+</html>
