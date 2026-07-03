@@ -9,6 +9,7 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 - **`index.html`** — the app. A single, self-contained file that talks to Supabase. This is all you need to run it. (Named `index.html` so GitHub Pages serves it automatically at the site root.)
 - **`koupon-lightweight-schema.sql`** — the database schema (tables + functions) this app runs against. Only needed if you're standing up a new Supabase project from scratch.
+- **`koupon-migration-2-issuer-role.sql`**, **`koupon-migration-3-weekly-drip.sql`**, **`koupon-migration-4-zero-start.sql`** — in-place database changes applied after the original schema, in order. Only needed if you're updating an existing Supabase project rather than starting fresh.
 - **`README.md`** — this guide.
 - **`koupon-requirements-brief.md`** and **`koupon-ledger-design.md`** — design blueprints for a *heavier, real-money-grade version* (double-entry ledger, escrow, phone-OTP auth). Not what's running today; kept in case KP ever needs to carry real value and that rigour becomes necessary.
 
@@ -16,13 +17,13 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 Open `index.html` on each family member's iPhone — email it to yourself, or open it from the Files app — and tap **Add to Home Screen** so it's easy to reopen. No camera permission or `https://` hosting requirement anymore (that was only ever needed for QR scanning, which is gone).
 
-**First time on a phone:** pick a handle (e.g. `@tania`) and a PIN, choose your role, and tap **Create new account**. If you already have an account (made on another phone, or the family banker made it for you), just enter your handle and PIN and tap **Log in** instead — your balance and history come with you to any device.
+**First time on a phone:** pick a handle (e.g. `@tania`) and a PIN, and tap **Create new account**. You'll land at 0 KP — ask a banker to issue your starting balance from the **Banker** tab. If you already have an account (made on another phone, or the family banker made it for you), just enter your handle and PIN and tap **Log in** instead — your balance and history come with you to any device.
 
 **To pay someone:** tap **Send**, type their handle and an amount, hit **Send**. It's instant — nothing to show or scan.
 
 ## Roles
 
-**Banker.** Set at account creation. The banker issues KP directly — the starting 100, the monthly +5, or any custom amount — straight into a member's account from the **Banker** tab. No code exchange.
+**Banker.** Assigned by an issuer, not chosen at account creation. New accounts start at 0 KP — the banker issues each member's first 100 KP by hand from the **Banker** tab, plus any custom top-up. (The +5 weekly bonus pays everyone automatically and doesn't need the banker.) No code exchange.
 
 **Fixing an account is banker-only,** two ways, both from the Banker tab:
 

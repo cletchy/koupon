@@ -20,8 +20,10 @@
 -- * Three roles: member < banker < issuer. Only an issuer can assign
 --   roles or suspend/reactivate an account (assign_role,
 --   set_member_status) -- self-signup always creates an active member
---   with a fixed 100 KP, never a banker or issuer. No account starts as
---   issuer; see the bootstrap note at the bottom of this file.
+--   starting at 0 KP, never a banker or issuer. The banker issues the
+--   member's first KP by hand afterward (Banker tab -> Issue start). No
+--   account starts as issuer; see the bootstrap note at the bottom of
+--   this file.
 -- * The old QR "backup code -> banker -> restore code" flow is gone. The
 --   server keeps the full history permanently, so undoing a mistake is
 --   reverse_transaction() below: banker or issuer picks the bad entry,
@@ -82,11 +84,12 @@ create policy "rewards readable" on rewards for select using (true);
 
 -- ---------- functions ----------
 
--- create a new member. Always an active plain member starting at a fixed
--- 100 KP -- p_role and p_start are accepted for client compatibility but
--- ignored, so self-signup can never grant banker/issuer or a chosen
--- starting balance. Role changes go through assign_role() (issuer-only).
-create or replace function create_member(p_handle text, p_pin text, p_role text default 'member', p_start integer default 100)
+-- create a new member. Always an active plain member starting at 0 KP --
+-- p_role and p_start are accepted for client compatibility but ignored,
+-- so self-signup can never grant banker/issuer or a chosen starting
+-- balance. The banker grants the real starting balance afterward via
+-- issue_kp(). Role changes go through assign_role() (issuer-only).
+create or replace function create_member(p_handle text, p_pin text, p_role text default 'member', p_start integer default 0)
 returns uuid
 language plpgsql
 security definer
@@ -94,7 +97,7 @@ as $$
 declare v_id uuid;
 begin
   insert into members (handle, role, pin_hash, balance, status)
-  values (p_handle, 'member', crypt(p_pin, gen_salt('bf')), 100, 'active')
+  values (p_handle, 'member', crypt(p_pin, gen_salt('bf')), 0, 'active')
   returning id into v_id;
   return v_id;
 end;
