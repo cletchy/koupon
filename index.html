@@ -170,6 +170,12 @@
   <!-- BANKER -->
   <section id="view-banker" class="hide">
     <div class="card">
+      <h2>Member balances 📊</h2>
+      <p class="muted">Everyone's current balance, for reference before issuing, resetting, or redeeming.</p>
+      <button class="btn sec" id="bk-bal-refresh" style="margin-top:4px">Refresh balances</button>
+      <div id="bk-bal-list" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
       <h2>Banker tools 🏦</h2>
       <p class="muted">Issue koupon directly — it lands in their account immediately.</p>
       <label>Issue to (handle)</label>
@@ -227,6 +233,17 @@
       <p class="muted" id="set-info"></p>
       <p class="muted" style="margin-top:8px">Your balance lives on the server now, not this phone — logging out and back in (even on a different phone) picks up right where you left off.</p>
       <button class="btn warn" id="set-logout" style="margin-top:8px">Log out</button>
+    </div>
+    <div class="card">
+      <h2>Change your PIN</h2>
+      <p class="muted">Update the PIN you log in with. You'll need your current one.</p>
+      <label>Current PIN</label>
+      <input id="pin-old" type="password" inputmode="numeric" placeholder="Current PIN" />
+      <label>New PIN</label>
+      <input id="pin-new" type="password" inputmode="numeric" placeholder="4-6 digits" />
+      <label>Confirm new PIN</label>
+      <input id="pin-new2" type="password" inputmode="numeric" placeholder="Repeat new PIN" />
+      <button class="btn sec" id="pin-change-go" style="margin-top:12px">Update PIN</button>
     </div>
   </section>
 </div>
@@ -299,7 +316,7 @@ function go(v){
   document.querySelectorAll(".tab").forEach(b=> b.classList.toggle("on", b.dataset.go===v));
   if(v==="home"){ refreshHome(); homePoll=setInterval(refreshHome, 12000); }
   if(v==="rewards") loadRewards();
-  if(v==="banker") $("bk-lookup-result").classList.add("hide");
+  if(v==="banker"){ $("bk-lookup-result").classList.add("hide"); loadBankerBalances(); }
   if(v==="issuer") loadIssuerList();
   window.scrollTo(0,0);
 }
@@ -388,6 +405,25 @@ $("rw-add").onclick=async ()=>{
   toast("Reward added.");
   loadRewards();
 };
+
+/* ---------- banker: all balances ---------- */
+async function loadBankerBalances(){
+  const { data, error } = await sb.from('members').select('handle,balance,role,status').order('handle');
+  if(error) return toast(errMsg(error));
+  renderBankerBalances(data||[]);
+}
+function renderBankerBalances(members){
+  const wrap=$("bk-bal-list"); wrap.innerHTML="";
+  if(!members.length){ wrap.innerHTML='<p class="muted center">No members yet.</p>'; return; }
+  members.forEach(m=>{
+    const row=document.createElement("div"); row.className="reward";
+    const statusTag = m.status==='suspended' ? ' <span class="tag bad">suspended</span>' : '';
+    row.innerHTML = '<div class="nm">'+escapeHtml(m.handle)+statusTag+' <span class="muted">· '+m.role+'</span></div>'
+      + '<div class="cost">'+m.balance+' KP</div>';
+    wrap.appendChild(row);
+  });
+}
+$("bk-bal-refresh").onclick=loadBankerBalances;
 
 /* ---------- banker: issue ---------- */
 async function bankerIssue(amount){
@@ -514,6 +550,19 @@ $("is-drip-now").onclick=async ()=>{
 
 /* ---------- settings ---------- */
 $("set-logout").onclick=()=>{ if(confirm("Log out on this phone?")){ clearSession(); location.reload(); } };
+
+$("pin-change-go").onclick=async ()=>{
+  const oldPin=$("pin-old").value.trim(), newPin=$("pin-new").value.trim(), confirmPin=$("pin-new2").value.trim();
+  if(!oldPin) return toast("Enter your current PIN.");
+  if(!/^[0-9]{4,6}$/.test(newPin)) return toast("New PIN must be 4-6 digits.");
+  if(newPin!==confirmPin) return toast("New PINs don't match.");
+  if(newPin===oldPin) return toast("That's already your PIN.");
+  const { error } = await sb.rpc('change_pin', { p_handle: SESSION.handle, p_old_pin: oldPin, p_new_pin: newPin });
+  if(error) return toast(errMsg(error));
+  SESSION.pin = newPin; saveSession();
+  $("pin-old").value=""; $("pin-new").value=""; $("pin-new2").value="";
+  toast("PIN updated ✓");
+};
 
 /* ---------- auth ---------- */
 document.querySelectorAll(".tab").forEach(b=> b.onclick=()=>go(b.dataset.go));

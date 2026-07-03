@@ -113,6 +113,30 @@ as $$
   where handle = p_handle and pin_hash = crypt(p_pin, pin_hash);
 $$;
 
+-- let a member change their own PIN. Requires the current PIN, exactly
+-- like every other mutation -- just self-service instead of
+-- banker/issuer-driven. New PIN must be 4-6 digits, same rule the app
+-- already enforces at signup.
+create or replace function change_pin(p_handle text, p_old_pin text, p_new_pin text)
+returns void
+language plpgsql
+security definer
+as $$
+declare v_id uuid;
+begin
+  if p_new_pin is null or length(p_new_pin) < 4 or length(p_new_pin) > 6 or p_new_pin !~ '^[0-9]+$' then
+    raise exception 'PIN must be 4-6 digits';
+  end if;
+
+  select id into v_id from members
+    where handle = p_handle and pin_hash = crypt(p_old_pin, pin_hash)
+    for update;
+  if v_id is null then raise exception 'bad handle or current PIN'; end if;
+
+  update members set pin_hash = crypt(p_new_pin, gen_salt('bf')) where id = v_id;
+end;
+$$;
+
 -- move KP between two members, atomically, with a row lock so concurrent
 -- sends can't both pass the balance check (the double-spend guard).
 -- Both sides must be active.
@@ -335,7 +359,7 @@ $$;
 
 -- allow the anon (public) role to call these functions; RLS on the tables
 -- still blocks any direct table writes, so this is the only door in.
-grant execute on function create_member, verify_pin, transfer_kp, issue_kp,
+grant execute on function create_member, verify_pin, change_pin, transfer_kp, issue_kp,
   reset_member, reverse_transaction, add_reward, redeem_reward,
   assign_role, set_member_status
   to anon;

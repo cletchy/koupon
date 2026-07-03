@@ -295,4 +295,4 @@ grant execute on function assign_role, set_member_status to anon;
 -- just this one line separately (after the rest of the script above has
 -- already succeeded):
 
--- update members set rol
+-- update members set role = 'issuer' where handle = '@tania';

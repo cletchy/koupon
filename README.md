@@ -9,7 +9,7 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 - **`index.html`** — the app. A single, self-contained file that talks to Supabase. This is all you need to run it. (Named `index.html` so GitHub Pages serves it automatically at the site root.)
 - **`koupon-lightweight-schema.sql`** — the database schema (tables + functions) this app runs against. Only needed if you're standing up a new Supabase project from scratch.
-- **`koupon-migration-2-issuer-role.sql`**, **`koupon-migration-3-weekly-drip.sql`**, **`koupon-migration-4-zero-start.sql`** — in-place database changes applied after the original schema, in order. Only needed if you're updating an existing Supabase project rather than starting fresh.
+- **`koupon-migration-2-issuer-role.sql`**, **`koupon-migration-3-weekly-drip.sql`**, **`koupon-migration-4-zero-start.sql`**, **`koupon-migration-5-change-pin.sql`** — in-place database changes applied after the original schema, in order. Only needed if you're updating an existing Supabase project rather than starting fresh.
 - **`README.md`** — this guide.
 - **`koupon-requirements-brief.md`** and **`koupon-ledger-design.md`** — design blueprints for a *heavier, real-money-grade version* (double-entry ledger, escrow, phone-OTP auth). Not what's running today; kept in case KP ever needs to carry real value and that rigour becomes necessary.
 
@@ -25,6 +25,8 @@ Open `index.html` on each family member's iPhone — email it to yourself, or op
 
 **Banker.** Assigned by an issuer, not chosen at account creation. New accounts start at 0 KP — the banker issues each member's first 100 KP by hand from the **Banker** tab, plus any custom top-up. (The +5 weekly bonus pays everyone automatically and doesn't need the banker.) No code exchange.
 
+**Seeing everyone's balance.** Both banker and issuer get a read-only "Member balances" list at the top of the **Banker** tab — every handle, balance, role, and status at a glance, with a manual refresh. The issuer's own tab still has the fuller member list for role/status changes.
+
 **Fixing an account is banker-only,** two ways, both from the Banker tab:
 
 - **Reset a member.** Sets a member's balance to a chosen number directly. History isn't erased — a "reset" entry is logged alongside everything else, so there's always a record of what changed and why.
@@ -35,6 +37,7 @@ Open `index.html` on each family member's iPhone — email it to yourself, or op
 ## Good to know
 
 - **PIN, not a password.** Each account has a short PIN (4-6 digits) chosen at creation, checked server-side on every action. It's there so one phone can't act as someone else's handle — not meant to withstand real attacks, just honest mistakes and impersonation, appropriate for a trusted-family app.
+- **Change your PIN anytime.** From the **More** tab, enter your current PIN and a new 4-6 digit one to update it — no banker or issuer involved, self-service.
 - **Balances sync automatically.** Home refreshes on a short timer while you're on it, plus a manual **Refresh** button, so activity from other phones shows up without you doing anything.
 - **Data lives on Supabase now, not on your phone.** Losing or replacing a phone just means logging in again elsewhere with the same handle and PIN — nothing to back up or restore manually.
 - **Not audited/tamper-proof.** Balances are plain integer columns, not a double-entry ledger — fine for a family game, not the rigour of `koupon-ledger-design.md`. Revisit that blueprint if KP ever needs to be trustworthy at a level beyond "we trust each other."
