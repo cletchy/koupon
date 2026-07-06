@@ -275,6 +275,26 @@ begin
 end;
 $$;
 
+-- banker or issuer adjusts an existing reward's price. Plain update, not
+-- a history-logged transaction -- rewards aren't KP balances, so there's
+-- nothing to reconcile, just the shared price list.
+create or replace function update_reward(p_banker_handle text, p_banker_pin text, p_reward_id bigint, p_cost integer)
+returns void
+language plpgsql
+security definer
+as $$
+declare v_banker_id uuid; v_banker_status text;
+begin
+  if p_cost <= 0 then raise exception 'cost must be positive'; end if;
+  select id, status into v_banker_id, v_banker_status from members
+    where handle = p_banker_handle and pin_hash = crypt(p_banker_pin, pin_hash) and role in ('banker','issuer');
+  if v_banker_id is null then raise exception 'not authorized as banker'; end if;
+  if v_banker_status <> 'active' then raise exception 'your account is suspended'; end if;
+  update rewards set cost = p_cost where id = p_reward_id;
+  if not found then raise exception 'reward not found'; end if;
+end;
+$$;
+
 -- redeem a reward: debits the member (must be active); banker fulfills
 -- the reward in person, same as before (no banker "account" holds the KP).
 create or replace function redeem_reward(p_handle text, p_pin text, p_reward_id bigint)
@@ -360,7 +380,7 @@ $$;
 -- allow the anon (public) role to call these functions; RLS on the tables
 -- still blocks any direct table writes, so this is the only door in.
 grant execute on function create_member, verify_pin, change_pin, transfer_kp, issue_kp,
-  reset_member, reverse_transaction, add_reward, redeem_reward,
+  reset_member, reverse_transaction, add_reward, update_reward, redeem_reward,
   assign_role, set_member_status
   to anon;
 

@@ -383,8 +383,25 @@ function renderRewards(rws){
     d.innerHTML='<div class="nm">'+escapeHtml(r.name)+'</div><div class="cost">'+r.cost+' KP</div>';
     const b=document.createElement("button"); b.className="btn sm sec"; b.textContent="Redeem"; b.style.marginLeft="10px";
     b.onclick=()=>redeemReward(r);
-    d.appendChild(b); list.appendChild(d);
+    d.appendChild(b);
+    if(isBankerLike()){
+      const e=document.createElement("button"); e.className="btn sm ghost"; e.textContent="Edit"; e.style.marginLeft="4px";
+      e.onclick=()=>editRewardCost(r);
+      d.appendChild(e);
+    }
+    list.appendChild(d);
   });
+}
+async function editRewardCost(r){
+  const raw=prompt('New price for "'+r.name+'" (KP):', r.cost);
+  if(raw===null) return;
+  const cost=Number(raw);
+  if(!(cost>0)) return toast("Enter a valid positive amount.");
+  if(cost===r.cost) return toast("No change.");
+  const { error } = await sb.rpc('update_reward', { p_banker_handle: SESSION.handle, p_banker_pin: SESSION.pin, p_reward_id: r.id, p_cost: cost });
+  if(error) return toast(errMsg(error));
+  toast('Updated "'+r.name+'" to '+cost+' KP ✓');
+  loadRewards();
 }
 async function redeemReward(r){
   if(isSuspended()) return toast("Your account is suspended — contact your issuer.");
