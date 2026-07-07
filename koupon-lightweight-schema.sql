@@ -59,6 +59,9 @@ create table history (
   note text,
   reversed boolean not null default false,
   reverses_id bigint references history(id),
+  fulfilled boolean not null default false,
+  fulfilled_by text,
+  fulfilled_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -319,6 +322,32 @@ begin
 end;
 $$;
 
+-- banker or issuer marks a redeemed reward as handed over to the member.
+-- This is the "notification cleared" signal: every redemption starts
+-- unfulfilled, and the Banker tab (visible to both banker and issuer)
+-- shows a pending-redemptions list + tab badge until someone here clears it.
+create or replace function fulfill_redemption(p_banker_handle text, p_banker_pin text, p_history_id bigint)
+returns void
+language plpgsql
+security definer
+as $$
+declare v_banker_id uuid; v_banker_status text; v_row history%rowtype;
+begin
+  select id, status into v_banker_id, v_banker_status from members
+    where handle = p_banker_handle and pin_hash = crypt(p_banker_pin, pin_hash) and role in ('banker','issuer');
+  if v_banker_id is null then raise exception 'not authorized as banker'; end if;
+  if v_banker_status <> 'active' then raise exception 'your account is suspended'; end if;
+
+  select * into v_row from history where id = p_history_id for update;
+  if v_row is null then raise exception 'history entry not found'; end if;
+  if v_row.kind <> 'redeem' then raise exception 'not a redemption entry'; end if;
+  if v_row.fulfilled then raise exception 'already marked fulfilled'; end if;
+
+  update history set fulfilled = true, fulfilled_by = p_banker_handle, fulfilled_at = now()
+    where id = p_history_id;
+end;
+$$;
+
 -- issuer-only: assign any role to any member. Blocks demoting the last
 -- active issuer, so admin control can never be accidentally lost.
 create or replace function assign_role(p_issuer_handle text, p_issuer_pin text, p_target_handle text, p_new_role text)
@@ -381,7 +410,7 @@ $$;
 -- still blocks any direct table writes, so this is the only door in.
 grant execute on function create_member, verify_pin, change_pin, transfer_kp, issue_kp,
   reset_member, reverse_transaction, add_reward, update_reward, redeem_reward,
-  assign_role, set_member_status
+  fulfill_redemption, assign_role, set_member_status
   to anon;
 
 -- ---------- one-time bootstrap: promote your own account to issuer ----------

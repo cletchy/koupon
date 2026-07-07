@@ -76,9 +76,11 @@
   .amt.in{color:var(--good)} .amt.out{color:var(--bad)}
   .tabs{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;
     padding:6px 6px calc(6px + env(safe-area-inset-bottom));max-width:480px;margin:0 auto;box-shadow:0 -6px 20px rgba(0,0,0,.35)}
-  .tab{flex:1;text-align:center;padding:8px 2px;font-size:11px;color:var(--muted);font-weight:700;border:none;background:none;cursor:pointer;text-transform:uppercase;letter-spacing:.3px}
+  .tab{position:relative;flex:1;text-align:center;padding:8px 2px;font-size:11px;color:var(--muted);font-weight:700;border:none;background:none;cursor:pointer;text-transform:uppercase;letter-spacing:.3px}
   .tab .ic{display:block;font-size:20px;line-height:1}
   .tab.on{color:var(--accent2);text-shadow:0 0 10px rgba(34,211,238,.6)}
+  .tab-badge{position:absolute;top:2px;right:18%;background:var(--bad);color:#fff;font-size:10px;font-weight:800;
+    border-radius:999px;min-width:16px;height:16px;line-height:16px;padding:0 4px;box-shadow:0 0 8px rgba(255,59,107,.6)}
   .reward{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
   .reward:last-child{border-bottom:none}
   .reward .nm{font-weight:700}
@@ -170,6 +172,13 @@
   <!-- BANKER -->
   <section id="view-banker" class="hide">
     <div class="card">
+      <h2>Pending redemptions 🎁 <span class="tag" id="bk-pending-count"></span></h2>
+      <p class="muted">Members who've redeemed a reward but haven't collected it yet — visible here to both banker and issuer. Mark it fulfilled once you've handed it over.</p>
+      <button class="btn sec" id="bk-pending-refresh" style="margin-top:4px">Refresh</button>
+      <div id="bk-pending-list" style="margin-top:10px"></div>
+      <p class="muted center hide" id="bk-pending-empty">Nothing pending — all caught up.</p>
+    </div>
+    <div class="card">
       <h2>Member balances 📊</h2>
       <p class="muted">Everyone's current balance, for reference before issuing, resetting, or redeeming.</p>
       <button class="btn sec" id="bk-bal-refresh" style="margin-top:4px">Refresh balances</button>
@@ -253,7 +262,7 @@
   <button class="tab" data-go="home"><span class="ic">🏠</span>Home</button>
   <button class="tab" data-go="send"><span class="ic">↗️</span>Send</button>
   <button class="tab" data-go="rewards"><span class="ic">🎁</span>Rewards</button>
-  <button class="tab" data-go="banker" id="tab-banker"><span class="ic">🏦</span>Banker</button>
+  <button class="tab" data-go="banker" id="tab-banker"><span class="ic">🏦</span>Banker<span class="tab-badge hide" id="tab-banker-badge"></span></button>
   <button class="tab" data-go="issuer" id="tab-issuer"><span class="ic">👑</span>Issuer</button>
   <button class="tab" data-go="settings"><span class="ic">⚙️</span>More</button>
 </nav>
@@ -270,6 +279,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const SESSION_KEY = "koupon_session_v1";
 let SESSION = null; // {id, handle, pin, role, status, balance}
 let homePoll = null;
+let pendingPoll = null;
 
 function loadSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){ return null; } }
 function saveSession(){ localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION)); }
@@ -307,6 +317,24 @@ function renderChrome(){
   $("tab-issuer").classList.toggle("hide", SESSION.role!=="issuer");
   $("set-info").textContent = SESSION.handle+" · "+(SESSION.role==="issuer"?"Issuer":SESSION.role==="banker"?"Banker":"Member")
     + (isSuspended() ? " · Suspended" : "");
+  startPendingPoll();
+}
+
+/* ---------- pending-redemption notifications (banker + issuer) ---------- */
+function startPendingPoll(){
+  if(pendingPoll){ clearInterval(pendingPoll); pendingPoll=null; }
+  if(!isBankerLike()) return;
+  refreshPendingBadge();
+  pendingPoll=setInterval(refreshPendingBadge, 15000);
+}
+async function refreshPendingBadge(){
+  if(!isBankerLike()) return;
+  const { count, error } = await sb.from('history').select('id', { count:'exact', head:true })
+    .eq('kind','redeem').eq('fulfilled', false);
+  if(error) return;
+  const badge=$("tab-banker-badge");
+  if(count>0){ badge.textContent = count>9 ? "9+" : String(count); badge.classList.remove("hide"); }
+  else badge.classList.add("hide");
 }
 
 const VIEWS=["auth","home","send","rewards","banker","issuer","settings"];
@@ -316,7 +344,7 @@ function go(v){
   document.querySelectorAll(".tab").forEach(b=> b.classList.toggle("on", b.dataset.go===v));
   if(v==="home"){ refreshHome(); homePoll=setInterval(refreshHome, 12000); }
   if(v==="rewards") loadRewards();
-  if(v==="banker"){ $("bk-lookup-result").classList.add("hide"); loadBankerBalances(); }
+  if(v==="banker"){ $("bk-lookup-result").classList.add("hide"); loadPendingRedemptions(); loadBankerBalances(); }
   if(v==="issuer") loadIssuerList();
   window.scrollTo(0,0);
 }
@@ -422,6 +450,39 @@ $("rw-add").onclick=async ()=>{
   toast("Reward added.");
   loadRewards();
 };
+
+/* ---------- banker: pending redemptions ---------- */
+async function loadPendingRedemptions(){
+  const { data, error } = await sb.from('history')
+    .select('id,amount,note,created_at,members(handle)')
+    .eq('kind','redeem').eq('fulfilled', false).order('created_at', { ascending:true });
+  if(error) return toast(errMsg(error));
+  renderPendingRedemptions(data||[]);
+  refreshPendingBadge();
+}
+function renderPendingRedemptions(items){
+  const wrap=$("bk-pending-list"); wrap.innerHTML="";
+  $("bk-pending-empty").classList.toggle("hide", items.length>0);
+  $("bk-pending-count").textContent = items.length ? items.length+" waiting" : "";
+  items.forEach(h=>{
+    const who = h.members ? h.members.handle : "unknown";
+    const reward = (h.note||"").replace(/^Redeem:\s*/,"");
+    const row=document.createElement("div"); row.className="reward";
+    row.innerHTML = '<div class="nm">'+escapeHtml(who)+' — '+escapeHtml(reward)
+      + '<div class="muted">'+h.amount+' KP · '+new Date(h.created_at).toLocaleString()+'</div></div>';
+    const b=document.createElement("button"); b.className="btn sm sec"; b.textContent="Mark fulfilled"; b.style.marginLeft="10px";
+    b.onclick=async ()=>{
+      if(!confirm('Mark "'+reward+'" for '+who+' as fulfilled?')) return;
+      const { error } = await sb.rpc('fulfill_redemption', { p_banker_handle: SESSION.handle, p_banker_pin: SESSION.pin, p_history_id: h.id });
+      if(error) return toast(errMsg(error));
+      toast("Marked fulfilled ✓");
+      loadPendingRedemptions();
+    };
+    row.appendChild(b);
+    wrap.appendChild(row);
+  });
+}
+$("bk-pending-refresh").onclick=loadPendingRedemptions;
 
 /* ---------- banker: all balances ---------- */
 async function loadBankerBalances(){

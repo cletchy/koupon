@@ -9,9 +9,10 @@ A small, just-for-fun app for sharing a play currency called **koupon (KP)** amo
 
 - **`index.html`** — the app. A single, self-contained file that talks to Supabase. This is all you need to run it. (Named `index.html` so GitHub Pages serves it automatically at the site root.)
 - **`koupon-lightweight-schema.sql`** — the database schema (tables + functions) this app runs against. Only needed if you're standing up a new Supabase project from scratch.
-- **`koupon-migration-2-issuer-role.sql`**, **`koupon-migration-3-weekly-drip.sql`**, **`koupon-migration-4-zero-start.sql`**, **`koupon-migration-5-change-pin.sql`** — in-place database changes applied after the original schema, in order. Only needed if you're updating an existing Supabase project rather than starting fresh.
+- **`koupon-migration-2-issuer-role.sql`**, **`koupon-migration-3-weekly-drip.sql`**, **`koupon-migration-4-zero-start.sql`**, **`koupon-migration-5-change-pin.sql`**, **`koupon-migration-6-adjust-reward-price.sql`** — in-place database changes applied after the original schema, in order. Only needed if you're updating an existing Supabase project rather than starting fresh.
 - **`README.md`** — this guide.
 - **`koupon-requirements-brief.md`** and **`koupon-ledger-design.md`** — design blueprints for a *heavier, real-money-grade version* (double-entry ledger, escrow, phone-OTP auth). Not what's running today; kept in case KP ever needs to carry real value and that rigour becomes necessary.
+- **`koupon-reward-list.md`** — v1 reward list and KP pricing, based on a family vote. A starting point, not a fixed price sheet — see the "Rewards" section above for how to adjust prices in-app.
 
 ## Running it
 
@@ -32,7 +33,7 @@ Open `index.html` on each family member's iPhone — email it to yourself, or op
 - **Reset a member.** Sets a member's balance to a chosen number directly. History isn't erased — a "reset" entry is logged alongside everything else, so there's always a record of what changed and why.
 - **Undo a transaction.** Look up any member's recent activity and reverse one specific entry. This replaces the old backup-code/restore-QR workaround entirely — since the server keeps the full log permanently, "undo" is just picking the bad entry and reversing it. Nothing to copy, nothing that can get lost.
 
-**Rewards.** The banker adds rewards (a name and a KP cost) on the **Rewards** tab, visible to everyone. A family member taps **Redeem**, which debits their balance immediately — they then collect the reward from the banker in person.
+**Rewards.** The banker adds rewards (a name and a KP cost) on the **Rewards** tab, visible to everyone. Banker/issuer can also **edit** an existing reward's price at any time (tap **Edit** next to Redeem) — handy for tuning prices as real activity data comes in. A family member taps **Redeem**, which debits their balance immediately — they then collect the reward from the banker in person.
 
 ## Good to know
 
